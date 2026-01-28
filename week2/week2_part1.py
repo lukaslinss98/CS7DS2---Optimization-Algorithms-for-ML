@@ -5,14 +5,14 @@ import numpy as np
 init_printing(use_unicode=True, use_latex=False)  
 
 x = symbols('x', real=True)
-y = x ** 4
-dx = diff(y, x)
+f = x ** 4
+dfdx = diff(f, x)
 
-f = lambdify(x, y)
-df = lambdify(x, dx, 'numpy')
+f = lambdify(x, f)
+dfdx = lambdify(x, dfdx)
 
 x_values = np.arange(-1, 1.1, 0.1)
-y_values = [df(x) for x in x_values]
+y_values = [dfdx(x) for x in x_values]
 
 plt.figure(figsize=(8,5))  
 plt.plot(x_values, y_values, 'k--', label='Exact Derivative', linewidth=3);
