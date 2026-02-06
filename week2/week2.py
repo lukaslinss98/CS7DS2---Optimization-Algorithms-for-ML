@@ -1,12 +1,13 @@
 import os
 import random
-from typing import Callable, List
+from typing import List
 
 import numpy as np
+from IPython.display import display
 from matplotlib import pyplot as plt
 from sympy import Abs, Symbol, diff, init_printing, lambdify, symbols
 
-init_printing(pretty_print=True, use_latex=False)
+init_printing(use_unicode=True, use_latex=False)
 
 
 def gradient_descent(func, args: List[Symbol], a=0.05, initial_vals=None, iters=50):
@@ -35,40 +36,41 @@ def gradient_descent(func, args: List[Symbol], a=0.05, initial_vals=None, iters=
 def gradient_descent_foo(derivatives: List, args: List, a=0.05, initial=1.5, iters=50):
     xs = [initial] * len(args)
 
-    xs_walk = [xs]
+    steps = [xs]
     for _ in range(iters):
         xs = [x - a * d(x) for x, d in zip(xs, derivatives)]
-        xs_walk.append(xs)
+        steps.append(xs)
 
-    return xs, xs_walk
+    return xs, steps
 
 
 def question_1():
     x = symbols('x', real=True)
-    f = x**4
-    dfdx = diff(f, x)
-    print(dfdx)
+    f_sym = x**4
+    dfdx = diff(f_sym, x)
+    display(f_sym, dfdx)
 
     ### part b
-    f = lambdify(x, f)
+    f_sym = lambdify(x, f_sym)
     dfdx = lambdify(x, dfdx)
+    delta = 0.01
+    finite_diff_approx = lambda x, d: (f_sym(x + d) - f_sym(x)) / d
 
-    x_values = np.arange(-2, 2.1, 0.1)
-    y_values = [dfdx(x) for x in x_values]
+    x_range = np.arange(-2, 2.1, 0.1)
 
     plt.figure(figsize=(8, 5))
-    plt.plot(x_values, y_values, 'k--', label='Exact Derivative', linewidth=2.5)
-
-    finite_diff_approx = lambda f, x, delta: (f(x + delta) - f(x)) / delta
-
-    y_values_approx = [finite_diff_approx(f, xs, delta=0.01) for xs in x_values]
-
-    plt.plot(x_values, y_values_approx, label=f'Finite difference (δ={0.01})')
+    plt.plot(x_range, dfdx(x_range), 'k--', label='Exact Derivative', linewidth=2.5)
+    plt.plot(
+        x_range,
+        finite_diff_approx(x_range, delta),
+        label=f'Finite difference (δ={0.01})',
+    )
 
     plt.title('Exact Derivative vs. Forward Finite-Difference Approx.')
     plt.xlabel('x', fontsize=14)
     plt.ylabel('Derivative', fontsize=14)
     plt.legend(loc='best', framealpha=0.95)
+    plt.grid(visible=True, alpha=0.4)
     plt.savefig('./images/question1.b.png', dpi=300, bbox_inches='tight')
     plt.show()
 
@@ -82,12 +84,14 @@ def question_1():
 
     mean_squared_errors = []
     for d in deltas:
-        y_approx_values = [finite_diff_approx(f, x, d) for x in x_values]
-        mean_squared_errors.append(mae(y_values, y_approx_values))
+        expected = dfdx(x_range)
+        actual = finite_diff_approx(x_range, d)
+        mean_squared_errors.append(mae(expected, actual))
 
     plt.plot(deltas, mean_squared_errors, marker='o', label='MAE')
     plt.title('MAE for different δ', fontsize=16, pad=10)
     plt.xlabel('δ', fontsize=14)
+    plt.xscale('log')
     plt.ylabel('MAE', fontsize=14)
     plt.grid(visible=True, alpha=0.4)
     plt.tight_layout()
@@ -97,45 +101,46 @@ def question_1():
 
     ### part d
     x = symbols('x')
-    f = x**4
+    f_sym = x**4
 
-    def gradient_descent(function, args, iterations=100, alpha=0.05, initial_value=1):
+    def gradient_descent(function, args, iters=100, alpha=0.05, init_val=1):
 
-        f = lambdify(args, function)
         dfdx = lambdify(args, diff(function, args))
-        x = initial_value
-        x_walk = [x]
-        function_values = [f(x)]
+        x = init_val
+        steps = [x]
 
-        for iteration in range(1, iterations + 1):
+        for _ in range(1, iters):
             step = alpha * dfdx(x)
             x -= step
-            x_walk.append(x)
-            function_values.append(f(x))
+            steps.append(x)
 
-            if iteration % 10 == 0:
-                print(f'Iteration: {iteration}, value: {x}')
+        return x, np.array(steps)
 
-        plt.plot(range(iterations + 1), function_values, label='f(x)')
-        plt.plot(range(iterations + 1), x_walk, label='x')
-        plt.title(f'f(x) and x vs. iterations, {alpha=}')
-        plt.xlabel('iterations')
-        plt.ylabel('f(x) / x')
-        plt.legend(loc='best', framealpha=0.95)
-        plt.savefig(
-            f'./images/question1e_alpha={alpha}.png', dpi=300, bbox_inches='tight'
-        )
-        plt.show()
-        return x
+    alphas = [0.05, 0.5, 1.2]
+    _, axes = plt.subplots(1, len(alphas), figsize=(21, 8))
+    f = lambdify(x, f_sym)
 
-    optimum = gradient_descent(f, x, iterations=20, alpha=0.05, initial_value=1)
-    print(f'{optimum=}, {0.05=}')
+    for alpha, ax in zip(alphas, axes):
+        iters = 30 if alpha <= 1 else 5
+        x_range = range(1, iters + 1)
 
-    optimum = gradient_descent(f, x, iterations=20, alpha=0.5, initial_value=1)
-    print(f'{optimum=}, {0.5=}')
+        _, steps = gradient_descent(f_sym, x, iters, alpha=alpha, init_val=1)
 
-    optimum = gradient_descent(f, x, iterations=5, alpha=1.2, initial_value=1)
-    print(f'{optimum=}, {1.2=}')
+        ax.plot(x_range, steps, label='x', marker='o')
+        ax.plot(x_range, f(steps), label='f(x)', marker='o')
+        ax.set_title(f'f(x) and x vs. Iterations, {alpha=}', fontsize=14)
+        ax.set_xlabel('Iterations', fontsize=14)
+        ax.set_ylabel('f(x) / x', fontsize=14)
+        if alpha >= 1:
+            ax.set_yscale('symlog')
+            print(steps)
+            print(f(steps))
+
+        ax.legend(loc='best', framealpha=0.95)
+        ax.grid(visible=True, alpha=0.4)
+
+    plt.savefig('./images/question1e.png', dpi=300, bbox_inches='tight')
+    plt.show()
 
 
 ### Question II
@@ -387,7 +392,7 @@ if __name__ == '__main__':
         os.makedirs('./images')
 
     question_1()
-    question_2()
-    question_3()
-    question_4_a_b()
-    question_4_c_d()
+    # question_2()
+    # question_3()
+    # question_4_a_b()
+    # question_4_c_d()
