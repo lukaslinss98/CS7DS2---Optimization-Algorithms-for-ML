@@ -5,13 +5,13 @@ from typing import List
 import numpy as np
 from IPython.display import display
 from matplotlib import pyplot as plt
-from sympy import Abs, Symbol, diff, init_printing, lambdify, symbols
+from sympy import Symbol, diff, init_printing, lambdify, symbols
 
 init_printing(use_unicode=True, use_latex=False)
 
 
-def gradient_descent(func, args: List[Symbol], a=0.05, initial_vals=None, iters=50):
-    if initial_vals != None and len(args) != len(initial_vals):
+def gradient_descent(func, args: List[Symbol], a=0.05, init_vals=None, iters=50):
+    if init_vals != None and len(args) != len(init_vals):
         raise Exception('Initial values have to be proivided for all args')
 
     derivatives = [
@@ -21,9 +21,7 @@ def gradient_descent(func, args: List[Symbol], a=0.05, initial_vals=None, iters=
         )
         for arg in args
     ]
-    xs: List = (
-        [random.uniform(0, 2)] * len(args) if initial_vals == None else initial_vals
-    )
+    xs: List = [random.uniform(0, 2)] * len(args) if init_vals == None else init_vals
 
     xs_steps = [xs]
     for _ in range(iters):
@@ -31,17 +29,6 @@ def gradient_descent(func, args: List[Symbol], a=0.05, initial_vals=None, iters=
         xs_steps.append(xs)
 
     return xs, xs_steps
-
-
-def gradient_descent_foo(derivatives: List, args: List, a=0.05, initial=1.5, iters=50):
-    xs = [initial] * len(args)
-
-    steps = [xs]
-    for _ in range(iters):
-        xs = [x - a * d(x) for x, d in zip(xs, derivatives)]
-        steps.append(xs)
-
-    return xs, steps
 
 
 def question_1():
@@ -82,13 +69,13 @@ def question_1():
         actual = np.array(actual)
         return np.mean(np.abs(expected - actual))
 
-    mean_squared_errors = []
+    mean_absolute_errors = []
     for d in deltas:
         expected = dfdx(x_range)
         actual = finite_diff_approx(x_range, d)
-        mean_squared_errors.append(mae(expected, actual))
+        mean_absolute_errors.append(mae(expected, actual))
 
-    plt.plot(deltas, mean_squared_errors, marker='o', label='MAE')
+    plt.plot(deltas, mean_absolute_errors, marker='o', label='MAE')
     plt.title('MAE for different δ', fontsize=16, pad=10)
     plt.xlabel('δ', fontsize=14)
     plt.xscale('log')
@@ -103,57 +90,51 @@ def question_1():
     x = symbols('x')
     f_sym = x**4
 
-    def gradient_descent(function, args, iters=100, alpha=0.05, init_val=1):
+    def gradient_descent(function, arg, iters=20, alpha=0.05, init_val=1):
 
-        dfdx = lambdify(args, diff(function, args))
+        dfdx = lambdify(arg, diff(function, arg))
         x = init_val
         steps = [x]
 
-        for _ in range(1, iters):
-            step = alpha * dfdx(x)
-            x -= step
+        for _ in range(iters):
+            x -= alpha * dfdx(x)
             steps.append(x)
 
-        return x, np.array(steps)
+        return x, steps
 
     alphas = [0.05, 0.5, 1.2]
-    _, axes = plt.subplots(1, len(alphas), figsize=(21, 8))
+    _, axes = plt.subplots(1, len(alphas), figsize=(18.5, 8))
+    axes[0].set_ylabel('f(x) / x', fontsize=14)
+
     f = lambdify(x, f_sym)
 
     for alpha, ax in zip(alphas, axes):
-        iters = 30 if alpha <= 1 else 5
-        x_range = range(1, iters + 1)
+        iters = 20 if alpha <= 1 else 5
+        x_range = range(iters + 1)
 
         _, steps = gradient_descent(f_sym, x, iters, alpha=alpha, init_val=1)
 
-        ax.plot(x_range, steps, label='x', marker='o')
+        steps = np.array(steps)
+
         ax.plot(x_range, f(steps), label='f(x)', marker='o')
         ax.set_title(f'f(x) and x vs. Iterations, {alpha=}', fontsize=14)
         ax.set_xlabel('Iterations', fontsize=14)
-        ax.set_ylabel('f(x) / x', fontsize=14)
         if alpha >= 1:
             ax.set_yscale('symlog')
-            print(steps)
-            print(f(steps))
 
-        ax.legend(loc='best', framealpha=0.95)
         ax.grid(visible=True, alpha=0.4)
 
+    plt.legend(loc='upper right', bbox_to_anchor=(1.35, 1), fontsize=14)
     plt.savefig('./images/question1e.png', dpi=300, bbox_inches='tight')
     plt.show()
 
 
-### Question II
-### part a
 def question_2():
     x_0, x_1 = symbols('x_0 x_1')
     f_sym = 0.5 * (x_0**2 + 10 * x_1**2)
-    dfdx_0 = diff(f_sym, x_0)
-    dfdx_1 = diff(f_sym, x_1)
 
     f = lambdify(args=[x_0, x_1], expr=f_sym)
 
-    print(dfdx_0, dfdx_1)
     value_range = np.linspace(-2, 2, 100)
     X_0, X_1 = np.meshgrid(value_range, value_range)
 
@@ -166,112 +147,137 @@ def question_2():
     plt.show()
 
     ### part b
+    alphas = [0.05, 0.2]
+    _, axes = plt.subplots(1, 2, figsize=(15, 7))
 
-    _, xs_walk = gradient_descent(
-        f_sym, [x_0, x_1], a=0.05, initial_vals=[1.5, 1.5], iters=100
-    )
-    _, xs_walk_2 = gradient_descent(
-        f_sym, [x_0, x_1], a=0.02, initial_vals=[1.5, 1.5], iters=100
-    )
+    for alpha, ax in zip(alphas, axes):
+        opt, steps = gradient_descent(
+            f_sym, [x_0, x_1], a=alpha, init_vals=[1.5, 1.5], iters=100
+        )
+        cs = ax.contour(X_0, X_1, f(X_0, X_1), levels=10, cmap='plasma')
+        ax.clabel(cs, inline=True, fontsize=8)
+        ax.set_title(
+            f'GD with {alpha=}, Optimum:({opt[0]:.2f}, {opt[1]:.2f}),',
+            fontsize=14,
+            pad=15,
+        )
+        ax.set_xlabel('x_0', fontsize=14)
+        ax.set_ylabel('x_1', fontsize=14)
 
-    cs = plt.contour(X_0, X_1, f(X_0, X_1), levels=10, cmap='plasma')
-    plt.clabel(cs, inline=True, fontsize=8)
-    plt.title(f'Gradient Decent on f(x_0, x_1)={f_sym}', fontsize=14, pad=15)
-    plt.xlabel('x_0', fontsize=14)
-    plt.ylabel('x_1', fontsize=14)
+        ax.plot(*zip(*steps), 'b.-', linewidth=1, label=f'Gradient Descent')
 
-    plt.plot(*zip(*xs_walk), 'b.-', linewidth=1, label='alpha=0.05')
-    plt.plot(*zip(*xs_walk_2), 'r.-', linewidth=1, label='alpha=0.02')
-
-    plt.legend(loc='best', framealpha=0.95)
+    plt.legend(loc='upper right', bbox_to_anchor=(1.5, 1), fontsize=14)
     plt.savefig('./images/question2b.png', dpi=300, bbox_inches='tight')
     plt.show()
 
-    # part I
+    # part II
     x = symbols('x')
     f_sym = x**4 - 2 * x**2 + 0.1 * x
-    print(f_sym)
     f = lambdify(x, f_sym)
 
     x_values = np.linspace(-2, 2, 100)
 
-    x_opt, _ = gradient_descent(f_sym, [x], initial_vals=[1.5], a=0.05)
+    x_opt, steps = gradient_descent(f_sym, [x], init_vals=[1.5], a=0.05)
     x_opt = x_opt[0]
-    y_opt = f(x_opt)
 
-    x_opt2, _ = gradient_descent(f_sym, [x], initial_vals=[-1.5], a=0.05)
-    x_opt2 = x_opt2[0]
-    y_opt2 = f(x_opt2)
+    x_opt_2, steps_2 = gradient_descent(f_sym, [x], init_vals=[-1.5], a=0.05)
+    x_opt_2 = x_opt_2[0]
 
-    plt.plot(x_values, f(x_values))
-    plt.scatter(
-        x_opt,
-        y_opt,
-        marker='o',
-        s=50,
+    steps = np.array(steps)
+    steps_2 = np.array(steps_2)
+
+    plt.step(
+        steps,
+        f(steps),
+        where='pre',
         color='red',
-        label=f'x_0=1.5 optimum ({x_opt:.4f},{y_opt:.4f})',
+        linewidth='1',
+        label='GD from x_0=1.5',
     )
-    plt.scatter(
-        x_opt2,
-        y_opt2,
-        marker='o',
-        s=50,
-        color='green',
-        label=f'x_0=-1.5 optimum ({x_opt:.4f},{y_opt:.4f})',
+    plt.plot(steps, f(steps), 'o', color='red', markersize=4)
+
+    plt.step(
+        steps_2,
+        f(steps_2),
+        where='pre',
+        color='blue',
+        linewidth='1',
+        label='GD from x_0=-1.5',
     )
-    plt.legend(loc='best', framealpha=0.95)
-    plt.title('Optimum Comparision for x_0 1.5 vs. -1.5', fontsize=14)
+    plt.plot(steps_2, f(steps_2), 'o', color='blue', markersize=4)
+
+    plt.plot(x_values, f(x_values), color='black')
+
+    plt.title('GD comparision for x_0 = 1.5 vs. -1.5', fontsize=14)
     plt.xlabel('x', fontsize=14)
     plt.ylabel('f(x)', fontsize=14)
+    plt.legend(loc='best')
     plt.savefig('./images/question2c.png', dpi=300, bbox_inches='tight')
     plt.show()
 
 
-### Question 3
-### part 1
 def question_3():
     x = symbols('x')
     f_sym = x**2
     f = lambdify(x, f_sym)
     max_iters = 20
-    alpha = 0.1
 
-    _, steps = gradient_descent(f_sym, [x], a=0.1, initial_vals=[1], iters=max_iters)
-    xs = np.array(steps).flatten()
+    alphas = [0.1, 0.01, 1.01]
+    _, axes = plt.subplots(1, len(alphas), figsize=(16, 5))
+    axes[0].set_ylabel('f(x) / x', fontsize=14)
 
-    x_vals = range(max_iters + 1)
-    plt.plot(x_vals, f(xs), label='f(x)')
-    plt.plot(x_vals, xs, label='x')
+    for alpha, ax in zip(alphas, axes):
+        _, steps = gradient_descent(f_sym, [x], a=alpha, init_vals=[1], iters=max_iters)
+        xs = np.array(steps).flatten()
 
-    plt.title(f'f(x) and x vs. Iterations, alpha={alpha}', fontsize=14)
-    plt.yscale('log')
-    plt.xlabel('Iterations', fontsize=14)
-    plt.ylabel('f(x) / x', fontsize=14)
-    plt.legend(loc='best', framealpha=0.95)
-    plt.savefig(f'./images/question3b_alpha{alpha}.png', dpi=300, bbox_inches='tight')
+        x_vals = range(max_iters + 1)
+        ax.plot(x_vals, f(xs), label='f(x)')
+        ax.plot(x_vals, xs, label='x')
+
+        ax.set_title(f'f(x) and x vs. Iterations, alpha={alpha}', fontsize=14)
+        ax.set_xlabel('Iterations', fontsize=14)
+        ax.legend(loc='best')
+        if alpha == 1.01:
+            ax.set_yscale('symlog')
+        else:
+            ax.set_ylim(1e-4, 1e1)
+            ax.set_yscale('log')
+
+    plt.savefig(f'./images/question3b.png', dpi=300, bbox_inches='tight')
     plt.show()
 
     ### part2
     gammas = [0.5, 1, 2, 5]
     _, axes = plt.subplots(2, 2, figsize=(14, 10))
+    max_iters = 20
 
     for gamma, ax in zip(gammas, axes.flatten()):
-        max_iters = 50
-
         x = symbols('x')
         f_sym = gamma * x**2
         f = lambdify(args=[x], expr=f_sym)
 
-        _, steps = gradient_descent(f_sym, [x], a=0.1, initial_vals=[1], iters=50)
+        _, steps = gradient_descent(f_sym, [x], a=0.1, init_vals=[1], iters=max_iters)
 
         xs = np.array(steps).flatten()
 
         x_vals = range(max_iters + 1)
-        ax.plot(x_vals, f(xs), 'r--', label='f(x)', linewidth=1)
-        ax.plot(x_vals, xs, label='x', linewidth=3)
+        ax.plot(
+            x_vals,
+            f(xs),
+            label='f(x)',
+        )
+        ax.plot(
+            x_vals,
+            xs,
+            label='x',
+        )
         ax.set_title(f'f(x) and x vs. Iterations, gamma {gamma}', fontsize=14)
-        ax.set_yscale('log')
+        if gamma == 5:
+            ax.set_yscale('symlog')
+        else:
+            ax.set_yscale('log')
+            ax.set_ylim(1e-9, 1e1)
+
         ax.set_xlabel('Iterations')
         ax.set_ylabel('f(x) / x')
         ax.legend(loc='best')
@@ -280,15 +286,17 @@ def question_3():
     plt.show()
 
     ### part 3
-    x = symbols('x')
-    f_sym = Abs(x)
     max_iters = 60
     alpha = 0.1
-    initial_value = 1
+    initial_value = 1.0
 
-    _, steps = gradient_descent_foo(
-        [np.sign], [x], a=alpha, iters=max_iters, initial=initial_value
-    )
+    x = initial_value
+    steps = [x]
+    for _ in range(max_iters):
+        step = alpha * np.sign(x)
+        x -= step
+        steps.append(x)
+
     xs = range(max_iters + 1)
 
     plt.plot(xs, steps, label='x')
@@ -298,6 +306,7 @@ def question_3():
     plt.xlabel('Iterations', fontsize=14)
     plt.ylabel('f(x) / x', fontsize=14)
     plt.legend(loc='best', framealpha=0.95)
+    plt.savefig('./images/question3f.png', dpi=300, bbox_inches='tight')
     plt.show()
 
 
@@ -360,13 +369,17 @@ def question_4_c_d():
     # part c
     plt.figure(figsize=(12, 8))
     cs = plt.contour(X1, X2, f(X1, X2), levels=25, cmap='plasma')
-    plt.clabel(cs, inline=True, fontsize=8)
+    plt.clabel(cs, inline=True, fontsize=6)
+    plt.title(f'Contour Plot of f(x_1, x_2)={f_sym}', fontsize=14)
+    plt.xlabel('X1', fontsize=14)
+    plt.ylabel('X2', fontsize=14)
+    plt.savefig('./images/question4c.png', dpi=300, bbox_inches='tight')
     plt.show()
 
     # part d
     alphas = [0.001, 0.005]
     max_iters = 2000
-    _, axes = plt.subplots(1, 2, figsize=(20, 8))
+    _, axes = plt.subplots(1, 2, figsize=(20, 6))
 
     for alpha, ax in zip(alphas, axes):
         ax.contour(X1, X2, f(X1, X2), levels=25, cmap='plasma')
@@ -379,7 +392,9 @@ def question_4_c_d():
             steps.append(xs)
 
         ax.plot(*zip(*steps), 'r.-', linewidth=1)
-        ax.set_title(f'Gradient Descent on {f_sym}, {alpha=}', fontsize=14)
+        ax.set_title(
+            f'GD with {alpha=}, Optimum=({xs[0]:.3f}, {xs[1]:.3f})', fontsize=14
+        )
         ax.set_xlabel('X1', fontsize=14)
         ax.set_ylabel('X2', fontsize=14)
 
@@ -392,7 +407,7 @@ if __name__ == '__main__':
         os.makedirs('./images')
 
     question_1()
-    # question_2()
-    # question_3()
-    # question_4_a_b()
-    # question_4_c_d()
+    question_2()
+    question_3()
+    question_4_a_b()
+    question_4_c_d()
