@@ -15,16 +15,14 @@ def polyak_step_size(fn, args, init_vals, iters=50):
     derivatives = [sp.diff(fn, arg) for arg in args]
 
     f = sp.lambdify(args, expr=fn)
-    min_args = sp.solve(derivatives, args, dict=True)  # List always!
+    min_args = sp.solve(derivatives, args, dict=True)
     f_star = float(f(*list(min_args[0].values())))
 
     derivatives = [sp.lambdify(args, expr=d) for d in derivatives]
-    epsilon = 0.00001
     for _ in range(iters):
         grads = np.array([d(*xs) for d in derivatives])
 
-        alpha = (f(*xs) - f_star) / np.dot(grads, grads) + epsilon
-
+        alpha = (f(*xs) - f_star) / np.dot(grads, grads) + 0.00001
         xs = xs - alpha * grads
         xs_steps.append(xs.tolist())
 
@@ -38,14 +36,12 @@ def rms_prop(fn, args, alpha, beta, init_vals, iters=50):
 
     derivatives = [sp.lambdify(args, sp.diff(fn, arg)) for arg in args]
 
-    epsilon = 0.00001
     sum = 0
     for _ in range(iters):
         grads = np.array([d(*xs) for d in derivatives])
         sum = beta * sum + (1 - beta) * grads**2
 
-        alpha = a_0 / (np.sqrt(sum) + epsilon)
-
+        alpha = a_0 / (np.sqrt(sum) + 0.00001)
         xs = xs - alpha * grads
         xs_steps.append(xs.tolist())
 
@@ -58,7 +54,7 @@ def heavy_ball(fn, args, alpha, beta, init_vals, iters=50):
 
     derivatives = [sp.lambdify(args, sp.diff(fn, arg)) for arg in args]
 
-    z = np.zeros_like(len(args))
+    z = np.zeros(len(args))
     for _ in range(iters):
         grads = np.array([d(*xs) for d in derivatives])
 
@@ -75,19 +71,18 @@ def adam(fn, args, alpha, beta_1, beta_2, init_vals, iters=50):
 
     derivatives = [sp.lambdify(args, sp.diff(fn, arg)) for arg in args]
 
-    v = np.zeros_like(len(args))
-    m = np.zeros_like(len(args))
-    epsilon = 0.00001
-    for _ in range(iters):
+    v = np.zeros(len(args))
+    m = np.zeros(len(args))
+    for t in range(1, iters + 1):
         grads = np.array([d(*xs) for d in derivatives])
 
         m = beta_1 * m + (1 - beta_1) * grads
         v = beta_2 * v + (1 - beta_2) * grads**2
 
-        m_hat = m / (1 - beta_1)
-        v_hat = v / (1 - beta_2)
+        m_hat = m / (1 - beta_1**t)
+        v_hat = v / (1 - beta_2**t)
 
-        xs = xs - alpha * m_hat / (np.sqrt(v_hat) + epsilon)
+        xs = xs - alpha * m_hat / (np.sqrt(v_hat) + 0.00001)
         xs_steps.append(xs.tolist())
 
     return xs, xs_steps
@@ -99,54 +94,54 @@ def question1_part1():
     f = sp.lambdify(args=[x, y], expr=f_sym)
 
     iters = 200
-    intitial_values = [2, 2]
+    initial_values = [2, 2]
 
-    _, polyak_steps = polyak_step_size(f_sym, [x, y], intitial_values, iters=iters)
-    polyak_steps = np.array(polyak_steps)
+    optimizers = [
+        ('Polyak', polyak_step_size(f_sym, [x, y], initial_values, iters=iters)),
+        (
+            'RMSProp (α=0.2, β=0.9)',
+            rms_prop(
+                f_sym,
+                [x, y],
+                0.2,
+                0.9,
+                initial_values,
+                iters,
+            ),
+        ),
+        (
+            'Heavy Ball (α=0.01, β=0.9)',
+            heavy_ball(
+                f_sym,
+                [x, y],
+                0.01,
+                0.9,
+                initial_values,
+                iters,
+            ),
+        ),
+        (
+            'Adam (α=0.1, β_1=0.9, β_2=0.999)',
+            adam(
+                f_sym,
+                [x, y],
+                0.1,
+                0.9,
+                0.999,
+                initial_values,
+                iters,
+            ),
+        ),
+    ]
 
-    xs = polyak_steps[:, 0]
-    ys = polyak_steps[:, 1]
-    plt.plot(range(len(xs)), f(xs, ys), label='Polyak')
-
-    _, rms_prop_steps = rms_prop(
-        f_sym, [x, y], alpha=0.2, beta=0.9, init_vals=intitial_values, iters=iters
-    )
-    rms_prop_steps = np.array(rms_prop_steps)
-
-    xs = rms_prop_steps[:, 0]
-    ys = rms_prop_steps[:, 1]
-    plt.plot(range(len(xs)), f(xs, ys), label='RMSProp')
-
-    _, heavy_ball_steps = heavy_ball(
-        f_sym, [x, y], alpha=0.01, beta=0.9, init_vals=intitial_values, iters=iters
-    )
-    heavy_ball_steps = np.array(heavy_ball_steps)
-
-    xs = heavy_ball_steps[:, 0]
-    ys = heavy_ball_steps[:, 1]
-    plt.plot(range(len(xs)), f(xs, ys), label='Heavy Ball')
-
-    _, adam_steps = adam(
-        f_sym,
-        [x, y],
-        alpha=0.1,
-        beta_1=0.9,
-        beta_2=0.999,
-        init_vals=intitial_values,
-        iters=iters,
-    )
-    adam_steps = np.array(adam_steps)
-
-    xs = adam_steps[:, 0]
-    ys = adam_steps[:, 1]
-    plt.plot(range(len(xs)), f(xs, ys), label='Adam')
+    for label, (_, steps) in optimizers:
+        steps = np.array(steps)
+        plt.plot(range(len(steps)), f(steps[:, 0], steps[:, 1]), label=label)
 
     plt.title(f'Gradient Descent on f(x,y)={f_sym}')
     plt.xlabel('Iterations')
     plt.ylabel('Function Value')
-
     plt.yscale('log')
-
     plt.grid(visible=True)
     plt.legend()
     plt.savefig('./images/question1.I.png', dpi=300, bbox_inches='tight')
@@ -209,13 +204,13 @@ def question1_part3():
         iters=iters,
     )
 
-    plt.plot(*zip(*adam_steps), label='Adam')
+    plt.plot(*zip(*adam_steps), label='Adam (α=0.1, β_1=0.9, β_2=0.999)')
 
     _, rms_steps = rms_prop(
         f_sym, [x, y], alpha=0.02, beta=0.9, init_vals=init_vals, iters=iters
     )
 
-    plt.plot(*zip(*rms_steps), label='RMSProp')
+    plt.plot(*zip(*rms_steps), label='RMSProp (α=0.2, β=0.9)')
 
     plt.title(f'Gradient Descent on f(x,y)={f_sym}')
     plt.xlabel('X')
@@ -232,54 +227,54 @@ def question2_part1():
     f = sp.lambdify(args=[x, y], expr=f_sym)
 
     iters = 3000
-    intitial_values = [-1.25, 2]
+    init_vals = [-1.25, 2]
 
-    _, polyak_steps = polyak_step_size(f_sym, [x, y], intitial_values, iters=iters)
-    polyak_steps = np.array(polyak_steps)
+    optimizers = [
+        ('Polyak', polyak_step_size(f_sym, [x, y], init_vals, iters=iters)),
+        (
+            'RMSProp (α=0.2, β=0.9)',
+            rms_prop(
+                f_sym,
+                [x, y],
+                0.2,
+                0.9,
+                init_vals,
+                iters,
+            ),
+        ),
+        (
+            'Heavy Ball (α=0.0002, β=0.9)',
+            heavy_ball(
+                f_sym,
+                [x, y],
+                0.0002,
+                0.9,
+                init_vals,
+                iters,
+            ),
+        ),
+        (
+            'Adam (α=0.05, β_1=0.9, β_2=0.999)',
+            adam(
+                f_sym,
+                [x, y],
+                0.05,
+                0.9,
+                0.999,
+                init_vals,
+                iters,
+            ),
+        ),
+    ]
 
-    xs = polyak_steps[:, 0]
-    ys = polyak_steps[:, 1]
-    plt.plot(range(len(xs)), f(xs, ys), label='Polyak')
-
-    _, rms_prop_steps = rms_prop(
-        f_sym, [x, y], alpha=0.2, beta=0.9, init_vals=intitial_values, iters=iters
-    )
-    rms_prop_steps = np.array(rms_prop_steps)
-
-    xs = rms_prop_steps[:, 0]
-    ys = rms_prop_steps[:, 1]
-    plt.plot(range(len(xs)), f(xs, ys), label='RMSProp')
-
-    _, heavy_ball_steps = heavy_ball(
-        f_sym, [x, y], alpha=0.0002, beta=0.9, init_vals=intitial_values, iters=iters
-    )
-    heavy_ball_steps = np.array(heavy_ball_steps)
-
-    xs = heavy_ball_steps[:, 0]
-    ys = heavy_ball_steps[:, 1]
-    plt.plot(range(len(xs)), f(xs, ys), label='Heavy Ball')
-
-    _, adam_steps = adam(
-        f_sym,
-        [x, y],
-        alpha=0.05,
-        beta_1=0.9,
-        beta_2=0.999,
-        init_vals=intitial_values,
-        iters=iters,
-    )
-    adam_steps = np.array(adam_steps)
-
-    xs = adam_steps[:, 0]
-    ys = adam_steps[:, 1]
-    plt.plot(range(len(xs)), f(xs, ys), label='Adam')
+    for label, (_, steps) in optimizers:
+        steps = np.array(steps)
+        plt.plot(range(len(steps)), f(steps[:, 0], steps[:, 1]), label=label)
 
     plt.title(f'Gradient Descent on f(x,y)={f_sym}')
     plt.xlabel('Iterations')
     plt.ylabel('Function Value')
-
     plt.yscale('log')
-
     plt.grid(visible=True)
     plt.legend()
     plt.savefig('./images/question2.I.png', dpi=300, bbox_inches='tight')
@@ -326,7 +321,8 @@ def question2_part3():
     iters = 3000
     init_vals = [-1.25, 0.5]
 
-    X, Y = np.meshgrid(np.linspace(-2, 2, 50), np.linspace(-1, 3, 50))
+    space = np.linspace(-2, 2, 50)
+    X, Y = np.meshgrid(space, space)
 
     plt.contour(X, Y, f(X, Y), levels=20)
 
@@ -339,20 +335,20 @@ def question2_part3():
     _, adam_steps = adam(
         f_sym,
         [x, y],
-        alpha=0.05,
-        beta_1=0.9,
-        beta_2=0.999,
-        init_vals=init_vals,
-        iters=iters,
+        0.05,
+        0.9,
+        0.999,
+        init_vals,
+        iters,
     )
 
-    plt.plot(*zip(*adam_steps), label='Adam')
+    plt.plot(*zip(*adam_steps), label='Adam (α=0.05, β_1=0.9, β_2=0.999)')
 
     _, rms_steps = rms_prop(
         f_sym, [x, y], alpha=0.01, beta=0.9, init_vals=init_vals, iters=iters
     )
 
-    plt.plot(*zip(*rms_steps), label='RMSProp')
+    plt.plot(*zip(*rms_steps), label='RMSProp (α=0.0.1, β=0.9)')
 
     plt.title(f'Gradient Descent on f(x,y)={f_sym}')
     plt.xlabel('X')
