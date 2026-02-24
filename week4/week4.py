@@ -186,37 +186,57 @@ def question1_part3():
 
     X, Y = np.meshgrid(np.linspace(-2, 2), np.linspace(-2, 2))
 
-    plt.contour(X, Y, f(X, Y), levels=10)
+    _, axes = plt.subplots(1, 3, figsize=(15, 8))
 
-    _, hb_steps = heavy_ball(
-        f_sym, [x, y], alpha=0.01, beta=0.9, init_vals=init_vals, iters=iters
-    )
+    optimizers = [
+        (
+            'Heavy Ball',
+            heavy_ball(
+                f_sym,
+                [x, y],
+                0.01,
+                0.9,
+                init_vals,
+                iters,
+            ),
+        ),
+        (
+            'RMSProp',
+            rms_prop(
+                f_sym,
+                [x, y],
+                0.2,
+                0.9,
+                init_vals,
+                iters,
+            ),
+        ),
+        (
+            'Adam',
+            adam(
+                f_sym,
+                [x, y],
+                0.1,
+                0.9,
+                0.999,
+                init_vals,
+                iters,
+            ),
+        ),
+    ]
 
-    plt.plot(*zip(*hb_steps), label='heavy ball')
+    for (
+        (label, (_, steps)),
+        ax,
+    ) in zip(optimizers, axes):
+        ax.contour(X, Y, f(X, Y), levels=10, cmap='plasma')
+        ax.plot(*zip(*steps), 'b--', label='GD Path', linewidth='1.5')
+        ax.scatter(0, 0, label='Optimum', c='black')
+        ax.set_title(f'{label} on f(x,y)={f_sym}')
+        ax.set_xlabel('X', fontsize=14)
+        ax.set_ylabel('Y', fontsize=14)
+        ax.legend()
 
-    _, adam_steps = adam(
-        f_sym,
-        [x, y],
-        alpha=0.1,
-        beta_1=0.9,
-        beta_2=0.999,
-        init_vals=init_vals,
-        iters=iters,
-    )
-
-    plt.plot(*zip(*adam_steps), label='Adam (α=0.1, β_1=0.9, β_2=0.999)')
-
-    _, rms_steps = rms_prop(
-        f_sym, [x, y], alpha=0.02, beta=0.9, init_vals=init_vals, iters=iters
-    )
-
-    plt.plot(*zip(*rms_steps), label='RMSProp (α=0.2, β=0.9)')
-
-    plt.title(f'Gradient Descent on f(x,y)={f_sym}')
-    plt.xlabel('X')
-    plt.ylabel('Y')
-
-    plt.legend()
     plt.savefig('./images/question1.III.png', dpi=300, bbox_inches='tight')
     plt.show()
 
