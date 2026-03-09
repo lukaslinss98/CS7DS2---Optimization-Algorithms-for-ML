@@ -226,12 +226,13 @@ def question1_part3():
     ]
 
     for (
-        (label, (_, steps)),
+        (label, (opt, steps)),
         ax,
     ) in zip(optimizers, axes):
         ax.contour(X, Y, f(X, Y), levels=10, cmap='plasma')
         ax.plot(*zip(*steps), 'b--', label='GD Path', linewidth='1.5')
-        ax.scatter(0, 0, label='Optimum', c='black')
+        ax.scatter(*opt, label='Final Step', c='blue')
+        ax.scatter(0, 0, label='Optimum', c='red', s=20)
         ax.set_title(f'{label} on f(x,y)={f_sym}')
         ax.set_xlabel('X', fontsize=14)
         ax.set_ylabel('Y', fontsize=14)
@@ -384,12 +385,13 @@ def question2_part3():
     ]
 
     for (
-        (label, (_, steps)),
+        (label, (opt, steps)),
         ax,
     ) in zip(optimizers, axes):
         ax.contour(X, Y, f(X, Y), levels=15, cmap='plasma')
         ax.plot(*zip(*steps), 'b--', label='GD Path', linewidth='1.5')
-        ax.scatter(1, 1, label='Optimum', c='black')
+        ax.scatter(1, 1, label='Optimum', c='red', s=20)
+        ax.scatter(*opt, label='Final Step', c='blue')
         ax.set_title(f'{label} on Rosenbrock')
         ax.set_xlabel('X', fontsize=13)
         ax.set_ylabel('Y', fontsize=13)
