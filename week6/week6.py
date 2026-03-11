@@ -103,7 +103,98 @@ def question_1a():
 
 
 def question_1b():
+    plt.rcParams.update(
+        {
+            'figure.figsize': (12, 6),
+            'axes.grid': True,
+            'grid.alpha': 0.3,
+            'axes.titlesize': 14,
+            'axes.labelsize': 12,
+            'legend.frameon': True,
+            'lines.linewidth': 1,
+            'lines.markersize': 3,
+            'savefig.dpi': 300,
+            'savefig.bbox': 'tight',
+        }
+    )
+    rng = np.random.default_rng(67)
 
+    m = 1000
+    X = rng.normal(0.0, 1.0, size=(m, 2))
+    eps = rng.normal(0.0, 1.0, size=(m, 1))
+    W_star = np.array([3, 4])
+
+    linear_regression = lambda X, w: (X @ w).reshape(X.shape[0], -1)
+    y = linear_regression(X, W_star) + eps
+
+    def loss(X, w, y):
+        y_hat = linear_regression(X, w)
+        erros = y_hat - y
+        return np.sum(erros**2, axis=0) * (1 / (2 * len(X)))
+
+    def dloss(X, w, y):
+        y_hat = linear_regression(X, w)
+        errors = y_hat - y
+        return (1 / len(X)) * X.T @ errors
+
+    space = np.linspace(0.5, 5, 100)
+    W1, W2 = np.meshgrid(space, space)
+
+    stacked = np.stack([W1.flatten(), W2.flatten()], axis=0)
+
+    batch_sizes = [len(X), 5, 20]
+    colors = ['blue', 'red', 'green']
+    updates = 400
+    alpha = 0.5
+
+    all_steps = []
+    all_losses = []
+    for batch_size in batch_sizes:
+        init_w = np.array([[1], [1]])
+        steps, batch_losses = gradient_descent(
+            loss, dloss, X, y, alpha, updates, init_w, batch_size
+        )
+        all_steps.append(steps)
+        all_losses.append(batch_losses)
+
+    fig_contour, ax_contour = plt.subplots()
+    ax_contour.set_title('SGD Trajectories by Batch Size')
+    ax_contour.set_xlabel('w1')
+    ax_contour.set_ylabel('w2')
+    ax_contour.contour(
+        W1, W2, loss(X, stacked, y).reshape(W1.shape), levels=20, cmap='plasma'
+    )
+    for steps, batch_size, color in zip(all_steps, batch_sizes, colors):
+        ax_contour.plot(
+            *zip(*steps[::10]),
+            color=color,
+            marker='o',
+            label=f'Batch size {batch_size}',
+        )
+        ax_contour.scatter(*steps[-1], c=color)
+    ax_contour.scatter(*W_star, c='red', s=30, label='Optimum')
+    ax_contour.legend()
+    fig_contour.savefig('./images/question1b_trajectories.png')
+    plt.show()
+
+    for batch_losses, batch_size in zip(all_losses, batch_sizes):
+        fig_loss, ax_loss = plt.subplots()
+        ax_loss.set_title(f'SGD Loss vs. Updates (Batch size {batch_size})')
+        ax_loss.set_xlabel('Updates')
+        ax_loss.set_ylabel('Loss (log)')
+        ax_loss.plot(
+            range(updates + 1),
+            batch_losses,
+            color='blue',
+            label=f'Batch size {batch_size}',
+        )
+        ax_loss.set_yscale('symlog')
+        ax_loss.legend()
+        fig_loss.savefig(f'./images/question1b_loss_batch_size-{batch_size}.png')
+        plt.show()
+
+
+def question_1c():
     plt.rcParams.update(
         {
             'figure.figsize': (12, 6),
