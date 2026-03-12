@@ -13,7 +13,8 @@ plt.rcParams.update(
         'axes.grid': True,
         'grid.alpha': 0.3,
         'axes.titlesize': 14,
-        'axes.labelsize': 12,
+        'axes.labelsize': 14,
+        'legend.fontsize': 9,
         'legend.frameon': True,
         'lines.linewidth': 1,
         'lines.markersize': 3,
@@ -571,12 +572,12 @@ def question_3a():
         zorder=5,
         label=f'Min: f={losses[min_idx]:.4f} at iter {min_idx}',
     )
-    plt.title('Rosenbrock GD: f(x) vs Iterations', fontsize=14)
-    plt.xlabel('Iteration', fontsize=14)
-    plt.ylabel('f(x) (log)', fontsize=14)
+    plt.title('Rosenbrock GD: f(x) vs Iterations')
+    plt.xlabel('Iteration')
+    plt.ylabel('f(x) (log)')
     plt.yscale('log')
-    plt.legend(fontsize=9)
-    plt.savefig('./images/question3a.png', dpi=300, bbox_inches='tight')
+    plt.legend()
+    plt.savefig('./images/question3a.png')
     plt.show()
 
 
@@ -600,12 +601,12 @@ def question_3b():
         zorder=5,
         label=f'Min: f={losses[min_idx]:.4f} at iter {min_idx}',
     )
-    plt.title('Rosenbrock Newton Updates: f(x) vs Iterations', fontsize=14)
-    plt.xlabel('Iteration', fontsize=14)
-    plt.ylabel('f(x) (log)', fontsize=14)
+    plt.title('Rosenbrock Newton Updates: f(x) vs Iterations')
+    plt.xlabel('Iteration')
+    plt.ylabel('f(x) (log)')
     plt.yscale('log')
-    plt.legend(fontsize=9)
-    plt.savefig('./images/question3b.png', dpi=300, bbox_inches='tight')
+    plt.legend()
+    plt.savefig('./images/question3b.png')
     plt.show()
 
 
@@ -639,12 +640,12 @@ def question_3c():
     plt.plot(gd_losses, label='GD', color='red')
     plt.plot(newton_losses, label='Newton', color='green')
     plt.plot(damped_losses, label='Damped Newton', color='blue')
-    plt.title('Rosenbrock: f(x) vs Iterations', fontsize=14)
-    plt.xlabel('Iteration', fontsize=14)
-    plt.ylabel('f(x) (log)', fontsize=14)
+    plt.title('Rosenbrock: f(x) vs Iterations')
+    plt.xlabel('Iteration')
+    plt.ylabel('f(x) (log)')
     plt.yscale('log')
-    plt.legend(fontsize=9)
-    plt.savefig('./images/question3c_loss.png', dpi=300, bbox_inches='tight')
+    plt.legend()
+    plt.savefig('./images/question3c_loss.png')
     plt.show()
 
     X1, X2 = np.meshgrid(np.linspace(-3, 2, 100), np.linspace(-2, 2.5, 100))
@@ -655,36 +656,30 @@ def question_3c():
     plt.plot(
         gd_steps[:, 0],
         gd_steps[:, 1],
-        linewidth=1.5,
         label='GD',
         color='red',
         marker='o',
-        markersize=3,
     )
     plt.plot(
         newton_steps[:, 0],
         newton_steps[:, 1],
-        linewidth=1.5,
         label='Newton',
         color='green',
         marker='o',
-        markersize=3,
     )
     plt.plot(
         damped_steps[:, 0],
         damped_steps[:, 1],
-        linewidth=1.5,
         label='Damped Newton',
         color='blue',
         marker='o',
-        markersize=3,
     )
-    plt.scatter(*x0, c='white', s=40, zorder=5, label='Start')
-    plt.title('Rosenbrock: Trajectories', fontsize=14)
-    plt.xlabel('x1', fontsize=14)
-    plt.ylabel('x2', fontsize=14)
-    plt.legend(fontsize=9)
-    plt.savefig('./images/question3c_trajectories.png', dpi=300, bbox_inches='tight')
+
+    plt.title('Rosenbrock: Trajectories')
+    plt.xlabel('x1')
+    plt.ylabel('x2')
+    plt.legend()
+    plt.savefig('./images/question3c_trajectories.png')
     plt.show()
 
 
@@ -692,16 +687,16 @@ if __name__ == '__main__':
     if not os.path.exists('./images'):
         os.makedirs('./images')
 
-    sp.init_printing(use_unicode=True, use_latex=False)
+    sp.init_printing(use_unicode=True, use_latex=False, pretty_print=True)
 
-    # question_1a()
-    # question_1b()
-    # question_1c()
-    #
-    # question_2a()
-    # question_2b()
-    # question_2c()
-    #
+    question_1a()
+    question_1b()
+    question_1c()
+
+    question_2a()
+    question_2b()
+    question_2c()
+
     question_3a()
     question_3b()
     question_3c()
