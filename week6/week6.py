@@ -25,20 +25,20 @@ plt.rcParams.update(
 
 
 def constant_optimizer(alpha, grad_fn):
-    return lambda X, w, y: -alpha * grad_fn(X, w, y)
+    return lambda X, theta, y: alpha * grad_fn(X, theta, y)
 
 
 def adagrad(alpha_0, grad_fn) -> Callable:
     alpha_t = alpha_0
     sum = 0
 
-    def step_fn(X, w, y):
+    def step_fn(X, theta, y):
         nonlocal alpha_t, sum
-        grads = grad_fn(X, w, y)
+        grads = grad_fn(X, theta, y)
 
         sum += grads**2
 
-        alpha_t = -alpha_0 / np.sqrt(sum + 0.000001)
+        alpha_t = alpha_0 / np.sqrt(sum + 0.000001)
 
         return alpha_t * grads
 
@@ -48,11 +48,11 @@ def adagrad(alpha_0, grad_fn) -> Callable:
 def nag(alpha, beta, grad_fn) -> Callable:
     z = 0
 
-    def step_fn(X, w, y):
+    def step_fn(X, theta, y):
         nonlocal z
 
-        z = beta * z - alpha * grad_fn(X, (w + beta * z), y)
-        return z
+        z = beta * z - alpha * grad_fn(X, (theta + beta * z), y)
+        return -z
 
     return step_fn
 
@@ -63,15 +63,15 @@ def gradient_descent(
     y: NDArray,
     optimizer: Callable,
     max_updates: int,
-    init_w,
+    init_theta: NDArray,
     batch_size=None,
 ):
     rng = np.random.default_rng(67)
 
     batch_size = batch_size if batch_size is not None else len(X)
-    w = init_w
-    steps = [w]
-    losses = [loss_fn(X, w, y).item()]
+    theta = init_theta.copy()
+    steps = [theta.copy()]
+    losses = [loss_fn(X, theta, y).item()]
     number_updates = 0
 
     while number_updates < max_updates:
@@ -86,12 +86,12 @@ def gradient_descent(
             X_batch = X_shuff[batch : batch + batch_size]
             y_batch = y_shuff[batch : batch + batch_size]
 
-            step = optimizer(X_batch, w, y_batch)
-            w = w + step
+            step = optimizer(X_batch, theta, y_batch)
+            theta = theta - step
 
             number_updates += 1
-            losses.append(loss_fn(X, w, y).item())
-            steps.append(w)
+            losses.append(loss_fn(X, theta, y).item())
+            steps.append(theta)
 
     return steps, losses
 
@@ -102,55 +102,63 @@ def _setup_question1():
     m = 1000
     X = rng.normal(0.0, 1.0, size=(m, 2))
     noise = rng.normal(0.0, 1.0, size=(m, 1))
-    W_star = np.array([3, 4])
+    theta_star = np.array([3, 4])
 
-    linear_regression = lambda X, w: (X @ w).reshape(X.shape[0], -1)
-    y = linear_regression(X, W_star) + noise
+    linear_regression = lambda X, theta: (X @ theta).reshape(X.shape[0], -1)
+    y = linear_regression(X, theta_star) + noise
 
-    def loss_fn(X, w, y):
-        y_hat = linear_regression(X, w)
+    def loss_fn(X, theta, y):
+        y_hat = linear_regression(X, theta)
         errors = y_hat - y
         return np.sum(errors**2, axis=0) * (1 / (2 * len(X)))
 
-    def dloss_fn(X, w, y):
-        y_hat = linear_regression(X, w)
+    def dloss_fn(X, theta, y):
+        y_hat = linear_regression(X, theta)
         errors = y_hat - y
         return (1 / len(X)) * X.T @ errors
 
-    space = np.linspace(0.5, 5, 100)
-    W1, W2 = np.meshgrid(space, space)
-    W_combinations = np.stack([W1.flatten(), W2.flatten()], axis=0)
+    space = np.linspace(0.5, 5.5, 100)
+    Theta1, Theta2 = np.meshgrid(space, space)
+    Theta_combs = np.stack([Theta1.flatten(), Theta2.flatten()], axis=0)
 
-    return X, y, W_star, loss_fn, dloss_fn, W1, W2, W_combinations
+    return X, y, theta_star, loss_fn, dloss_fn, Theta1, Theta2, Theta_combs
 
 
 def question_1a():
-    X, y, W_star, loss_fn, dloss_fn, W1, W2, W_combinations = _setup_question1()
+    X, y, theta_star, loss_fn, dloss_fn, Theta1, Theta2, Theta_combs = (
+        _setup_question1()
+    )
 
     epochs = 80
     alpha = 0.5
-    init_w = np.array([[1], [1]])
+    init_theta = np.array([[1], [1]])
 
     optimizer = constant_optimizer(alpha, dloss_fn)
-    steps, losses = gradient_descent(loss_fn, X, y, optimizer, epochs, init_w)
+    steps, losses = gradient_descent(loss_fn, X, y, optimizer, epochs, init_theta)
 
     _, axes = plt.subplots(1, 2)
     ax1, ax2 = axes
 
     ax1.set_title('Full GD Trajectory')
-    ax1.set_xlabel('w1')
-    ax1.set_ylabel('w2')
+    ax1.set_xlabel('theta_1')
+    ax1.set_ylabel('theta_2')
 
     ax1.contour(
-        W1,
-        W2,
-        loss_fn(X, W_combinations, y).reshape(W1.shape),
+        Theta1,
+        Theta2,
+        loss_fn(X, Theta_combs, y).reshape(Theta1.shape),
         levels=30,
         cmap='plasma',
     )
+    final_step = steps[-1].flatten()
     ax1.plot(*zip(*steps), color='blue', marker='o', label='Trajectory')
-    ax1.scatter(*steps[-1], c='blue', label='Last Step')
-    ax1.scatter(*W_star, c='black', s=30, label='Optimum')
+    ax1.scatter(
+        *final_step,
+        c='red',
+        zorder=5,
+        label=f'Last Step ({final_step[0]:.3f}, {final_step[1]:.3f})',
+    )
+    ax1.scatter(*theta_star, c='black', s=30, label='Optimum')
     ax1.legend()
 
     ax2.set_title('Full GD Loss vs. Iterations')
@@ -165,7 +173,9 @@ def question_1a():
 
 
 def question_1b():
-    X, y, W_star, loss_fn, dloss_fn, W1, W2, W_combinations = _setup_question1()
+    X, y, theta_star, loss_fn, dloss_fn, Theta1, Theta2, Theta_combs = (
+        _setup_question1()
+    )
 
     batch_sizes = [len(X), 5, 20]
     colors = ['blue', 'red', 'green']
@@ -176,21 +186,21 @@ def question_1b():
     all_losses = []
     optimizer = constant_optimizer(alpha, dloss_fn)
     for batch_size in batch_sizes:
-        init_w = np.array([[1], [1]])
+        init_theta = np.array([[1], [1]])
         steps, batch_losses = gradient_descent(
-            loss_fn, X, y, optimizer, updates, init_w, batch_size
+            loss_fn, X, y, optimizer, updates, init_theta, batch_size
         )
         all_steps.append(steps)
         all_losses.append(batch_losses)
 
     fig_contour, ax_contour = plt.subplots()
     ax_contour.set_title('SGD Trajectories by Batch Size')
-    ax_contour.set_xlabel('w1')
-    ax_contour.set_ylabel('w2')
+    ax_contour.set_xlabel('theta_1')
+    ax_contour.set_ylabel('theta_2')
     ax_contour.contour(
-        W1,
-        W2,
-        loss_fn(X, W_combinations, y).reshape(W1.shape),
+        Theta1,
+        Theta2,
+        loss_fn(X, Theta_combs, y).reshape(Theta1.shape),
         levels=20,
         cmap='plasma',
     )
@@ -202,30 +212,32 @@ def question_1b():
             label=f'Batch size {batch_size}',
         )
         ax_contour.scatter(*steps[-1], c=color)
-    ax_contour.scatter(*W_star, c='black', s=30, label='Optimum')
+    ax_contour.scatter(*theta_star, c='black', s=30, label='Optimum')
     ax_contour.legend()
     fig_contour.savefig('./images/question1b_trajectories.png')
     plt.show()
 
-    for batch_losses, batch_size in zip(all_losses, batch_sizes):
-        fig_loss, ax_loss = plt.subplots()
-        ax_loss.set_title(f'SGD Loss vs. Updates (Batch size {batch_size})')
-        ax_loss.set_xlabel('Updates')
-        ax_loss.set_ylabel('Loss (log)')
+    fig_loss, ax_loss = plt.subplots()
+    ax_loss.set_title('SGD Loss vs. Updates by Batch Size')
+    ax_loss.set_xlabel('Updates')
+    ax_loss.set_ylabel('Loss (log)')
+    for batch_losses, batch_size, color in zip(all_losses, batch_sizes, colors):
         ax_loss.plot(
             range(updates + 1),
             batch_losses,
-            color='blue',
+            color=color,
             label=f'Batch size {batch_size}',
         )
-        ax_loss.set_yscale('symlog')
-        ax_loss.legend()
-        fig_loss.savefig(f'./images/question1b_loss_batch_size-{batch_size}.png')
-        plt.show()
+    ax_loss.set_yscale('symlog')
+    ax_loss.legend()
+    fig_loss.savefig('./images/question1b_loss.png')
+    plt.show()
 
 
 def question_1c():
-    X, y, W_star, loss_fn, dloss_fn, W1, W2, W_combinations = _setup_question1()
+    X, y, theta_star, loss_fn, dloss_fn, Theta1, Theta2, Theta_combs = (
+        _setup_question1()
+    )
 
     updates = 400
     batch_size = 20
@@ -240,31 +252,29 @@ def question_1c():
 
     all_results = []
     for name, optimizer, color in optimizers:
-        init_w = np.array([[1], [1]])
+        init_theta = np.array([[1], [1]])
         steps, losses = gradient_descent(
-            loss_fn, X, y, optimizer, updates, init_w, batch_size
+            loss_fn, X, y, optimizer, updates, init_theta, batch_size
         )
         all_results.append((name, steps, losses, color))
 
     fig_contour, ax_contour = plt.subplots()
     ax_contour.set_title(f'Optimizer Trajectories (batch size {batch_size})')
-    ax_contour.set_xlabel('w1')
-    ax_contour.set_ylabel('w2')
+    ax_contour.set_xlabel('theta_1')
+    ax_contour.set_ylabel('theta_2')
     ax_contour.contour(
-        W1,
-        W2,
-        loss_fn(X, W_combinations, y).reshape(W1.shape),
+        Theta1,
+        Theta2,
+        loss_fn(X, Theta_combs, y).reshape(Theta1.shape),
         levels=20,
         cmap='plasma',
     )
 
     for name, steps, _, color in all_results:
-        ax_contour.plot(
-            *zip(*steps[::10]), color=color, marker='o', linewidth=1.5, label=name
-        )
+        ax_contour.plot(*zip(*steps[::2]), color=color, marker='o', label=name)
         ax_contour.scatter(*steps[-1], c=color)
 
-    ax_contour.scatter(*W_star, c='black', s=30, label='Optimum')
+    ax_contour.scatter(*theta_star, c='black', s=30, label='Optimum')
     ax_contour.legend()
     ax_contour.grid(False)
     fig_contour.savefig('./images/question1c_trajectories.png')
@@ -294,7 +304,7 @@ def _setup_question2():
 
     space = np.linspace(0, 3.5)
     X1, X2 = np.meshgrid(space, space)
-    X_combinations = np.stack([X1.flatten(), X2.flatten()], axis=0)
+    X_combs = np.stack([X1.flatten(), X2.flatten()], axis=0)
 
     def h(U, x):
         x_1, x_2 = x
@@ -318,7 +328,7 @@ def _setup_question2():
 
     y = h(U, X_star) + noise
 
-    return U, y, X_star, loss_fn, dloss_fn, X1, X2, X_combinations
+    return U, y, X_star, loss_fn, dloss_fn, X1, X2, X_combs
 
 
 def question_2a():
@@ -344,8 +354,15 @@ def question_2a():
         levels=20,
         cmap='plasma',
     )
+    final_step = steps[-1].flatten()
     ax1.plot(*zip(*steps), color='blue', marker='o', label='Trajectory')
-    ax1.scatter(*X_star, c='red', s=30, label='Optimum')
+    ax1.scatter(
+        *final_step,
+        c='red',
+        zorder=5,
+        label=f'Last Step ({final_step[0]:.3f}, {final_step[1]:.3f})',
+    )
+    ax1.scatter(*X_star, c='black', s=30, label='Optimum')
     ax1.legend()
 
     ax2.set_title('Full GD Loss vs. Iterations')
@@ -391,13 +408,19 @@ def question_2b():
         cmap='plasma',
     )
     for steps, batch_size, color in zip(all_steps, batch_sizes, colors):
+        final_step = steps[-1].flatten()
         ax_contour.plot(
             *zip(*steps[::]),
             color=color,
             marker='o',
             label=f'Batch size {batch_size}',
         )
-        ax_contour.scatter(*steps[-1], c=color)
+        ax_contour.scatter(
+            *final_step,
+            c=color,
+            zorder=5,
+            label=f'Final ({final_step[0]:.3f}, {final_step[1]:.3f})',
+        )
     ax_contour.scatter(*X_star, c='black', s=30, label='Optimum')
     ax_contour.legend()
     fig_contour.savefig('./images/question2b_trajectories.png')
@@ -455,8 +478,14 @@ def question_2c():
     )
 
     for name, steps, _, color in all_results:
+        final_step = steps[-1].flatten()
         ax_contour.plot(*zip(*steps[::]), color=color, marker='o', label=name)
-        ax_contour.scatter(*steps[-1], c=color)
+        ax_contour.scatter(
+            *final_step,
+            c=color,
+            zorder=5,
+            label=f'{name} Final ({final_step[0]:.3f}, {final_step[1]:.3f})',
+        )
 
     ax_contour.scatter(*X_star, c='black', s=30, label='Optimum')
     ax_contour.legend()
@@ -479,57 +508,84 @@ def question_2c():
 
 
 def _setup_question3():
-    x1, x2 = sp.symbols('x1 x2')
-    rosenbrock = (1 - x1) ** 2 + 100 * (x2 - x1**2) ** 2
-    f = sp.lambdify([x1, x2], rosenbrock)
 
-    dfdx1 = sp.lambdify([x1, x2], sp.diff(rosenbrock, x1))
-    dfdx2 = sp.lambdify([x1, x2], sp.diff(rosenbrock, x2))
-    grad_fn = lambda x: np.array([dfdx1(*x), dfdx2(*x)])
+    loss_fn = lambda x: (1 - x[0]) ** 2 + 100 * (x[1] - x[0] ** 2) ** 2
 
-    hessian_fn = sp.lambdify([x1, x2], sp.hessian(rosenbrock, (x1, x2)))
+    h = 1e-6
 
-    return f, grad_fn, hessian_fn
+    def grad_fn(x):
+        n = len(x)
+        grads = np.zeros(n)
+
+        for i in range(n):
+            e_i = np.zeros(n)
+            e_i[i] = 1.0
+            grads[i] = (loss_fn(x + h * e_i) - loss_fn(x - h * e_i)) / (2 * h)
+
+        return grads
+
+    def hessian_fn(x):
+        n = len(x)
+        H = np.zeros((n, n))
+
+        for i in range(n):
+            e_i = np.zeros(n)
+            e_i[i] = 1.0
+            for j in range(n):
+                e_j = np.zeros(n)
+                e_j[j] = 1.0
+                H[i, j] = (
+                    loss_fn(x + h * e_i + h * e_j)
+                    - loss_fn(x + h * e_i - h * e_j)
+                    - loss_fn(x - h * e_i + h * e_j)
+                    + loss_fn(x - h * e_i - h * e_j)
+                ) / (4 * h**2)
+
+        return H
+
+    return loss_fn, grad_fn, hessian_fn
 
 
 def gd(f, x, grad_fn, alpha, iters):
     steps = [x.copy()]
-    losses = [f(*x)]
+    losses = [f(x)]
     for _ in range(iters):
         grads = grad_fn(x)
         x = x - alpha * grads
 
         steps.append(x.copy())
-        losses.append(f(*x))
+        losses.append(f(x))
 
     return steps, losses
 
 
-def newtons_update_gd(f, x, grad_fn, hessian_fn, alpha, iters):
+def newton_update_gd(f, x, grad_fn, hessian_fn, alpha, iters):
     steps = [x.copy()]
-    losses = [f(*x)]
+    losses = [f(x)]
+    I = np.eye(2, 2)
     lam = 1e-6
     for _ in range(iters):
-        x = x - alpha * inv(hessian_fn(*x) + lam * np.eye(2, 2)) @ grad_fn(x)
+        x = x - alpha * inv(hessian_fn(x) + lam * I) @ grad_fn(x)
 
         steps.append(x.copy())
-        losses.append(f(*x))
+        losses.append(f(x))
 
     return steps, losses
 
 
 def damped_newton_step(fn, x, grad_fn, hessian_fn, alpha_0, max_k, shrink_factor):
-    fx_curr = fn(*x)
+    fx_curr = fn(x)
     grads = grad_fn(x)
-    hessian = hessian_fn(*x)
+    hessian = hessian_fn(x)
+    I = np.eye(2, 2)
     lam = 1e-6
 
     alpha = alpha_0
     for _ in range(max_k):
-        step = alpha * inv(hessian + lam * np.eye(2, 2)) @ grads
+        step = alpha * inv(hessian + lam * I) @ grads
         x_new = x - step
 
-        fx_new = fn(*x_new)
+        fx_new = fn(x_new)
         if fx_new < fx_curr:
             return step
 
@@ -540,7 +596,7 @@ def damped_newton_step(fn, x, grad_fn, hessian_fn, alpha_0, max_k, shrink_factor
 
 def damped_newton_gd(fn, x, grad_fn, hessian_fn, alpha_0, iters, max_k, shrink_factor):
     steps = [x.copy()]
-    losses = [fn(*x)]
+    losses = [fn(x)]
     for _ in range(iters):
         step = damped_newton_step(
             fn, x, grad_fn, hessian_fn, alpha_0, max_k, shrink_factor
@@ -548,7 +604,7 @@ def damped_newton_gd(fn, x, grad_fn, hessian_fn, alpha_0, iters, max_k, shrink_f
         x -= step
 
         steps.append(x.copy())
-        losses.append(fn(*x))
+        losses.append(fn(x))
 
     return steps, losses
 
@@ -588,7 +644,7 @@ def question_3b():
     iters = 200
     x = np.array([-1.0, 1.0])
 
-    _, losses = newtons_update_gd(f, x, grad_fn, hessian_fn, alpha, iters)
+    _, losses = newton_update_gd(f, x, grad_fn, hessian_fn, alpha, iters)
 
     min_idx = int(np.argmin(losses))
 
@@ -617,7 +673,7 @@ def question_3c():
     iterations = 200
 
     gd_steps, gd_losses = gd(f, x0, grad_fn, alpha=1e-3, iters=iterations)
-    newton_steps, newton_losses = newtons_update_gd(
+    newton_steps, newton_losses = newton_update_gd(
         f, x0, grad_fn, hessian_fn, alpha=0.7, iters=iterations
     )
 
@@ -651,7 +707,7 @@ def question_3c():
     X1, X2 = np.meshgrid(np.linspace(-3, 2, 100), np.linspace(-2, 2.5, 100))
     plt.figure(figsize=(12, 8))
 
-    cs = plt.contour(X1, X2, f(X1, X2), levels=30, cmap='plasma')
+    cs = plt.contour(X1, X2, f([X1, X2]), levels=30, cmap='plasma')
     plt.clabel(cs, inline=True, fontsize=6)
     plt.plot(
         gd_steps[:, 0],
