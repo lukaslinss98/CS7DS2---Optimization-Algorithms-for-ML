@@ -1,2 +1,20 @@
-[tool.ruff.format]
-quote-style = "single"
+[project]
+name = "optimization-algorithms"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "matplotlib>=3.10.8",
+    "numpy>=2.4.4",
+    "sympy>=1.14.0",
+]
+
+[tool.ruff]
+extend-select = ["Q000", "Q001", "Q002", "Q003", "Q004"]
+fix = true
+
+[tool.ruff.lint.flake8-quotes]
+inline-quotes = "single"
+multiline-quotes = "single"
+docstring-quotes = "single"

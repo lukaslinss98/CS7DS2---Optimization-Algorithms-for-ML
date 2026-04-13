@@ -1,6 +1,6 @@
-def main():
-    print("Hello from week8!")
+def question_1():
+    pass
 
 
 if __name__ == "__main__":
-    main()
+    question_1()
