@@ -89,7 +89,7 @@ def adam(fn, args, alpha, beta_1, beta_2, init_vals, iters=50):
 
 
 def question1_part1():
-    x, y = sp.symbols('x y')
+    x, y = sp.symbols("x y")
     f_sym = x**2 + 100 * y**2
     f = sp.lambdify(args=[x, y], expr=f_sym)
 
@@ -97,9 +97,9 @@ def question1_part1():
     initial_values = [2, 2]
 
     optimizers = [
-        ('Polyak', polyak_step_size(f_sym, [x, y], initial_values, iters=iters)),
+        ("Polyak", polyak_step_size(f_sym, [x, y], initial_values, iters=iters)),
         (
-            'RMSProp (α=0.2, β=0.9)',
+            "RMSProp (α=0.2, β=0.9)",
             rms_prop(
                 f_sym,
                 [x, y],
@@ -110,7 +110,7 @@ def question1_part1():
             ),
         ),
         (
-            'Heavy Ball (α=0.01, β=0.9)',
+            "Heavy Ball (α=0.01, β=0.9)",
             heavy_ball(
                 f_sym,
                 [x, y],
@@ -121,7 +121,7 @@ def question1_part1():
             ),
         ),
         (
-            'Adam (α=0.1, β_1=0.9, β_2=0.999)',
+            "Adam (α=0.1, β_1=0.9, β_2=0.999)",
             adam(
                 f_sym,
                 [x, y],
@@ -138,18 +138,18 @@ def question1_part1():
         steps = np.array(steps)
         plt.plot(range(len(steps)), f(steps[:, 0], steps[:, 1]), label=label)
 
-    plt.title(f'Gradient Descent on f(x,y)={f_sym}')
-    plt.xlabel('Iterations')
-    plt.ylabel('Function Value')
-    plt.yscale('log')
+    plt.title(f"Gradient Descent on f(x,y)={f_sym}")
+    plt.xlabel("Iterations")
+    plt.ylabel("Function Value")
+    plt.yscale("log")
     plt.grid(visible=True)
     plt.legend()
-    plt.savefig('./images/question1.I.png', dpi=300, bbox_inches='tight')
+    plt.savefig("./images/question1.I.png", dpi=300, bbox_inches="tight")
     plt.show()
 
 
 def question1_part2():
-    x, y = sp.symbols('x y')
+    x, y = sp.symbols("x y")
     f_sym = x**2 + 100 * y**2
 
     iters = 200
@@ -162,22 +162,22 @@ def question1_part2():
         heavy_ball_steps = np.array(heavy_ball_steps)
 
         xs = heavy_ball_steps[:, 0]
-        plt.plot(range(len(xs)), xs, label=f'{alpha=}')
+        plt.plot(range(len(xs)), xs, label=f"{alpha=}")
 
-    plt.title(f'Heavy Ball on f(x,y)={f_sym}')
-    plt.xlabel('Iterations')
-    plt.ylabel('x-values')
+    plt.title(f"Heavy Ball on f(x,y)={f_sym}")
+    plt.xlabel("Iterations")
+    plt.ylabel("x-values")
 
-    plt.yscale('symlog')
+    plt.yscale("symlog")
 
     plt.grid(visible=True)
     plt.legend()
-    plt.savefig('./images/question1.II.png', dpi=300, bbox_inches='tight')
+    plt.savefig("./images/question1.II.png", dpi=300, bbox_inches="tight")
     plt.show()
 
 
 def question1_part3():
-    x, y = sp.symbols('x y')
+    x, y = sp.symbols("x y")
     f_sym = x**2 + 100 * y**2
     f = sp.lambdify(args=[x, y], expr=f_sym)
 
@@ -190,7 +190,7 @@ def question1_part3():
 
     optimizers = [
         (
-            'Heavy Ball',
+            "Heavy Ball",
             heavy_ball(
                 f_sym,
                 [x, y],
@@ -201,7 +201,7 @@ def question1_part3():
             ),
         ),
         (
-            'RMSProp',
+            "RMSProp",
             rms_prop(
                 f_sym,
                 [x, y],
@@ -212,7 +212,7 @@ def question1_part3():
             ),
         ),
         (
-            'Adam',
+            "Adam",
             adam(
                 f_sym,
                 [x, y],
@@ -229,21 +229,21 @@ def question1_part3():
         (label, (opt, steps)),
         ax,
     ) in zip(optimizers, axes):
-        ax.contour(X, Y, f(X, Y), levels=10, cmap='plasma')
-        ax.plot(*zip(*steps), 'b--', label='GD Path', linewidth='1.5')
-        ax.scatter(*opt, label='Final Step', c='blue')
-        ax.scatter(0, 0, label='Optimum', c='red', s=20)
-        ax.set_title(f'{label} on f(x,y)={f_sym}')
-        ax.set_xlabel('X', fontsize=14)
-        ax.set_ylabel('Y', fontsize=14)
+        ax.contour(X, Y, f(X, Y), levels=10, cmap="plasma")
+        ax.plot(*zip(*steps), "b--", label="GD Path", linewidth="1.5")
+        ax.scatter(*opt, label="Final Step", c="blue")
+        ax.scatter(0, 0, label="Optimum", c="red", s=20)
+        ax.set_title(f"{label} on f(x,y)={f_sym}")
+        ax.set_xlabel("X", fontsize=14)
+        ax.set_ylabel("Y", fontsize=14)
         ax.legend()
 
-    plt.savefig('./images/question1.III.png', dpi=300, bbox_inches='tight')
+    plt.savefig("./images/question1.III.png", dpi=300, bbox_inches="tight")
     plt.show()
 
 
 def question2_part1():
-    x, y = sp.symbols('x y')
+    x, y = sp.symbols("x y")
     f_sym = (1 - x) ** 2 + 100 * (y - x**2) ** 2
     f = sp.lambdify(args=[x, y], expr=f_sym)
 
@@ -251,9 +251,9 @@ def question2_part1():
     init_vals = [-1.25, 2]
 
     optimizers = [
-        ('Polyak', polyak_step_size(f_sym, [x, y], init_vals, iters=iters)),
+        ("Polyak", polyak_step_size(f_sym, [x, y], init_vals, iters=iters)),
         (
-            'RMSProp (α=0.2, β=0.9)',
+            "RMSProp (α=0.2, β=0.9)",
             rms_prop(
                 f_sym,
                 [x, y],
@@ -264,7 +264,7 @@ def question2_part1():
             ),
         ),
         (
-            'Heavy Ball (α=0.0002, β=0.9)',
+            "Heavy Ball (α=0.0002, β=0.9)",
             heavy_ball(
                 f_sym,
                 [x, y],
@@ -275,7 +275,7 @@ def question2_part1():
             ),
         ),
         (
-            'Adam (α=0.05, β_1=0.9, β_2=0.999)',
+            "Adam (α=0.05, β_1=0.9, β_2=0.999)",
             adam(
                 f_sym,
                 [x, y],
@@ -292,18 +292,18 @@ def question2_part1():
         steps = np.array(steps)
         plt.plot(range(len(steps)), f(steps[:, 0], steps[:, 1]), label=label)
 
-    plt.title(f'Gradient Descent on f(x,y)={f_sym}')
-    plt.xlabel('Iterations')
-    plt.ylabel('Function Value')
-    plt.yscale('log')
+    plt.title(f"Gradient Descent on f(x,y)={f_sym}")
+    plt.xlabel("Iterations")
+    plt.ylabel("Function Value")
+    plt.yscale("log")
     plt.grid(visible=True)
     plt.legend()
-    plt.savefig('./images/question2.I.png', dpi=300, bbox_inches='tight')
+    plt.savefig("./images/question2.I.png", dpi=300, bbox_inches="tight")
     plt.show()
 
 
 def question2_part2():
-    x, y = sp.symbols('x y')
+    x, y = sp.symbols("x y")
     f_sym = (1 - x) ** 2 + 100 * (y - x**2) ** 2
 
     iters = 3000
@@ -322,20 +322,20 @@ def question2_part2():
         steps = np.array(steps)
 
         xs = steps[:, 0]
-        plt.plot(range(len(xs)), xs, label=f'{alpha=}')
+        plt.plot(range(len(xs)), xs, label=f"{alpha=}")
 
-    plt.title(f'Adam on f(x,y)={f_sym}')
-    plt.xlabel('Iterations')
-    plt.ylabel('x-values')
+    plt.title(f"Adam on f(x,y)={f_sym}")
+    plt.xlabel("Iterations")
+    plt.ylabel("x-values")
 
     plt.grid(visible=True)
     plt.legend()
-    plt.savefig('./images/question2.II.png', dpi=300, bbox_inches='tight')
+    plt.savefig("./images/question2.II.png", dpi=300, bbox_inches="tight")
     plt.show()
 
 
 def question2_part3():
-    x, y = sp.symbols('x y')
+    x, y = sp.symbols("x y")
     f_sym = (1 - x) ** 2 + 100 * (y - x**2) ** 2
     f = sp.lambdify(args=[x, y], expr=f_sym)
 
@@ -349,7 +349,7 @@ def question2_part3():
 
     optimizers = [
         (
-            'Heavy Ball',
+            "Heavy Ball",
             heavy_ball(
                 f_sym,
                 [x, y],
@@ -360,7 +360,7 @@ def question2_part3():
             ),
         ),
         (
-            'RMSProp',
+            "RMSProp",
             rms_prop(
                 f_sym,
                 [x, y],
@@ -371,7 +371,7 @@ def question2_part3():
             ),
         ),
         (
-            'Adam',
+            "Adam",
             adam(
                 f_sym,
                 [x, y],
@@ -388,22 +388,22 @@ def question2_part3():
         (label, (opt, steps)),
         ax,
     ) in zip(optimizers, axes):
-        ax.contour(X, Y, f(X, Y), levels=15, cmap='plasma')
-        ax.plot(*zip(*steps), 'b--', label='GD Path', linewidth='1.5')
-        ax.scatter(1, 1, label='Optimum', c='red', s=20)
-        ax.scatter(*opt, label='Final Step', c='blue')
-        ax.set_title(f'{label} on Rosenbrock')
-        ax.set_xlabel('X', fontsize=13)
-        ax.set_ylabel('Y', fontsize=13)
+        ax.contour(X, Y, f(X, Y), levels=15, cmap="plasma")
+        ax.plot(*zip(*steps), "b--", label="GD Path", linewidth="1.5")
+        ax.scatter(1, 1, label="Optimum", c="red", s=20)
+        ax.scatter(*opt, label="Final Step", c="blue")
+        ax.set_title(f"{label} on Rosenbrock")
+        ax.set_xlabel("X", fontsize=13)
+        ax.set_ylabel("Y", fontsize=13)
         ax.legend()
 
-    plt.savefig('./images/question2.III.png', dpi=300, bbox_inches='tight')
+    plt.savefig("./images/question2.III.png", dpi=300, bbox_inches="tight")
     plt.show()
 
 
-if __name__ == '__main__':
-    if not os.path.exists('./images'):
-        os.makedirs('./images')
+if __name__ == "__main__":
+    if not os.path.exists("./images"):
+        os.makedirs("./images")
 
     question1_part1()
     question1_part2()
