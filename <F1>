@@ -1,0 +1,519 @@
+import os
+
+import matplotlib.pyplot as plt
+import numpy as np
+import sympy as sp
+
+
+def setup_benchmark_1():
+    X = np.random.normal(0, 1, (1000, 2))
+    theta_star = np.array([3, 4]).reshape(2, 1)
+    eps = np.random.normal(0, 0.1, (1000, 1))
+
+    Y = X @ theta_star + eps
+
+    def lr(theta):
+        return X @ theta
+
+    def mse(theta):
+        m = len(X)
+        y_hat = lr(theta)
+        error = y_hat - Y
+        return (1 / (2 * m)) * np.sum(error**2)
+
+    def grad_fn(theta):
+        m = len(X)
+        return (1 / m) * X.T @ ((X @ theta) - Y)
+
+    return X, Y, lr, mse, grad_fn
+
+
+def setup_benchmark_2():
+
+    def net(x):
+        x1, x2 = x1, x2 = x[0, 0], x[1, 0]
+        return ((x1 - 1) ** 2) + (5 * (x2 - 2) ** 2) + np.sin(x1)
+
+    def grad_fn(x):
+        x1, x2 = x1, x2 = x[0, 0], x[1, 0]
+        dfdx1 = 2 * (x1 - 1) + np.cos(x1)
+        dfdx2 = 10 * (x2 - 2)
+        return np.array([dfdx1, dfdx2]).reshape(-1, 1)
+
+    return net, grad_fn
+
+
+def setup_benchmark_3():
+    def rosenbrock(x):
+        x1, x2 = x1, x2 = x[0, 0], x[1, 0]
+        return ((1 - x1) ** 2) + (100 * (x2 - x1**2) ** 2)
+
+    def grad_fn(x):
+        x1, x2 = x1, x2 = x[0, 0], x[1, 0]
+        dfdx1 = (-2 * (1 - x1)) - 400 * x1 * (x2 - x1**2)
+        dfdx2 = 200 * (x2 - x1**2)
+        return np.array([dfdx1, dfdx2]).reshape(-1, 1)
+
+    return rosenbrock, grad_fn
+
+
+def polyak(loss_fn, grad_fn, x0, f_star, eps, iters):
+    xi = np.array([x0]).reshape(-1, 1)
+    steps = [xi.copy()]
+    losses = [loss_fn(xi)]
+    alphas = []
+
+    for _ in range(iters):
+        grads = grad_fn(xi)
+
+        alpha = (loss_fn(xi) - f_star) / (np.sum(grads**2) + eps)
+        xi = xi - alpha * grads
+
+        steps.append(xi.copy())
+        losses.append(loss_fn(xi))
+        alphas.append(alpha)
+
+    return steps, losses, alphas
+
+
+def adagrad(loss_fn, grad_fn, x0, alpha0, iters):
+    xi = np.array([x0]).reshape(-1, 1)
+    alpha_t = alpha0
+    accumulator = np.zeros_like(xi, dtype=np.dtypes.Float64DType)
+
+    def step_fn(x):
+        nonlocal alpha_t, accumulator
+        grads = grad_fn(x)
+
+        accumulator += grads**2
+
+        alpha_t = alpha0 / np.sqrt(accumulator + 10**-5)
+
+        return alpha_t * grads, alpha_t
+
+    steps = [xi.copy()]
+    losses = [loss_fn(xi)]
+    alphas = []
+    for _ in range(iters):
+        step, alpha_t = step_fn(xi)
+        xi = xi - step
+
+        steps.append(xi.copy())
+        losses.append(loss_fn(xi))
+        alphas.append(alpha_t)
+
+    return steps, losses, alphas
+
+
+def rms_prop(loss_fn, grad_fn, x0, alpha, beta, iters):
+    a0 = alpha
+    xi = np.array([x0]).reshape(-1, 1)
+    steps = [xi]
+    losses = [loss_fn(xi)]
+    alphas = []
+
+    accumulator = 0
+    for _ in range(iters):
+        grads = grad_fn(xi)
+        accumulator = beta * accumulator + (1 - beta) * grads**2
+
+        alpha = a0 / (np.sqrt(accumulator) + 10**-5)
+        xi = xi - alpha * grads
+
+        steps.append(xi.tolist())
+        losses.append(loss_fn(xi))
+        alphas.append(alpha)
+
+    return steps, losses, alphas
+
+
+def question_1_I():
+    _, _, _, mse, grad_fn = setup_benchmark_1()
+
+    _, losses, alphas = polyak(
+        loss_fn=mse, grad_fn=grad_fn, x0=[0, 0], eps=10**-4, f_star=0, iters=120
+    )
+
+    _, ax = plt.subplots()
+    ax.set_title("Linear Regression f(x) vs Iterations")
+    ax.set_xlabel("Iterations")
+    ax.set_ylabel("f(x) (MSE)")
+    ax.plot(range(len(losses)), losses, color="blue", marker="o", label="Loss")
+    ax.set_yscale("log")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    plt.savefig("./final/images/question1_I_loss_mse.png")
+    plt.show()
+
+    _, ax = plt.subplots()
+    ax.set_title("Linear Regression: Alpha vs Iterations")
+    ax.set_xlabel("Iterations")
+    ax.set_ylabel("Alpha")
+    ax.plot(range(len(alphas)), alphas, color="blue", marker="o", label="Alpha")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    plt.savefig("./final/images/question1_I_alpha_mse.png")
+    plt.show()
+
+    net, grad_fn = setup_benchmark_2()
+
+    steps, losses, alphas = polyak(
+        loss_fn=net, grad_fn=grad_fn, x0=[0, 0], eps=10**-4, f_star=0, iters=120
+    )
+
+    _, ax = plt.subplots()
+    ax.set_title("Toy Neural Net f(x) vs Iterations")
+    ax.set_xlabel("Iterations")
+    ax.set_ylabel("f(x) Neural Net")
+    ax.plot(range(len(losses)), losses, color="blue", marker="o", label="Loss")
+    ax.set_yscale("log")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    plt.savefig("./final/images/question1_I_loss_net.png")
+    plt.show()
+
+    _, ax = plt.subplots()
+    ax.set_title("Toy Neural Net: Alpha vs Iterations")
+    ax.set_xlabel("Iterations")
+    ax.set_ylabel("Alpha")
+    ax.plot(range(len(alphas)), alphas, color="blue", marker="o", label="Alpha")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    plt.savefig("./final/images/question1_I_alpha_net.png")
+    plt.show()
+
+    space_x1 = np.linspace(-2, 4, 200)
+    space_x2 = np.linspace(-1, 5, 200)
+    X1, X2 = np.meshgrid(space_x1, space_x2)
+    Z = (X1 - 1) ** 2 + 5 * (X2 - 2) ** 2 + np.sin(X1)
+
+    traj = np.array([np.array(s).flatten() for s in steps])
+
+    _, ax = plt.subplots()
+    ax.set_title("Toy Neural Net: Contour and Polyak Trajectory")
+    ax.set_xlabel("x1")
+    ax.set_ylabel("x2")
+    ax.contour(X1, X2, Z, levels=30, cmap="plasma")
+    ax.plot(traj[:, 0], traj[:, 1], marker="o", color="blue", label="Trajectory")
+    ax.scatter(
+        *traj[-1],
+        c="red",
+        zorder=5,
+        label=f"Last ({traj[-1, 0]:.3f}, {traj[-1, 1]:.3f})",
+    )
+    ax.legend()
+    plt.savefig("./final/images/question1_I_contour_net.png")
+    plt.show()
+
+    rosenbrock, grad_fn = setup_benchmark_3()
+
+    steps, losses, alphas = polyak(
+        loss_fn=rosenbrock, grad_fn=grad_fn, x0=[0, 0], eps=10**-3, f_star=0, iters=120
+    )
+
+    _, ax = plt.subplots()
+    ax.set_title("Rosenbrock f(x) vs Iterations")
+    ax.set_xlabel("Iterations")
+    ax.set_ylabel("f(x) Rosenbrock")
+    ax.plot(range(len(losses)), losses, color="blue", marker="o", label="Loss")
+    ax.set_yscale("log")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    plt.savefig("./final/images/question1_I_loss_rosenbrock.png")
+    plt.show()
+
+    _, ax = plt.subplots()
+    ax.set_title("Rosenbrock: Alpha vs Iterations")
+    ax.set_xlabel("Iterations")
+    ax.set_ylabel("Alpha")
+    ax.plot(range(len(alphas)), alphas, color="blue", marker="o", label="Alpha")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    plt.savefig("./final/images/question1_I_alpha_rosenbrock.png")
+    plt.show()
+
+    space_x1 = np.linspace(-0.5, 2.0, 200)
+    space_x2 = np.linspace(-0.5, 2.5, 200)
+    X1, X2 = np.meshgrid(space_x1, space_x2)
+    Z = (1 - X1) ** 2 + 100 * (X2 - X1**2) ** 2
+
+    traj = np.array([np.array(s).flatten() for s in steps])
+
+    _, ax = plt.subplots()
+    ax.set_title("Rosenbrock: Contour and Polyak Trajectory")
+    ax.set_xlabel("x1")
+    ax.set_ylabel("x2")
+    ax.contour(X1, X2, Z, levels=30, cmap="plasma")
+    ax.plot(traj[:, 0], traj[:, 1], marker="o", color="blue", label="Trajectory")
+    ax.scatter(
+        *traj[-1],
+        c="red",
+        zorder=5,
+        label=f"Last ({traj[-1, 0]:.3f}, {traj[-1, 1]:.3f})",
+    )
+    ax.legend()
+    plt.savefig("./final/images/question1_I_contour_rosenbrock.png")
+    plt.show()
+
+
+def question_1_II():
+    _, _, _, mse, grad_fn = setup_benchmark_1()
+
+    _, losses, alphas = adagrad(
+        loss_fn=mse, grad_fn=grad_fn, x0=[0, 0], alpha0=1.8, iters=120
+    )
+
+    _, ax = plt.subplots()
+    ax.set_title("Linear Regression f(x) vs Iterations")
+    ax.set_xlabel("Iterations")
+    ax.set_ylabel("f(x) (MSE)")
+    ax.plot(range(len(losses)), losses, color="blue", marker="o", label="Loss")
+    ax.set_yscale("log")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    plt.savefig("./final/images/question1_II_loss_mse.png")
+    plt.show()
+
+    alpha_arr = np.array([a.flatten() for a in alphas])
+    _, ax = plt.subplots()
+    ax.set_title("Linear Regression: Alpha vs Iterations")
+    ax.set_xlabel("Iterations")
+    ax.set_ylabel("Alpha")
+    ax.plot(
+        range(len(alpha_arr)),
+        alpha_arr[:, 0],
+        marker="o",
+        color="red",
+        label="alpha θ0",
+    )
+    ax.plot(
+        range(len(alpha_arr)),
+        alpha_arr[:, 1],
+        marker="s",
+        color="green",
+        label="alpha θ1",
+    )
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    plt.savefig("./final/images/question1_II_alpha_mse.png")
+    plt.show()
+
+    net, grad_fn = setup_benchmark_2()
+
+    steps, losses, alphas = adagrad(
+        loss_fn=net, grad_fn=grad_fn, x0=[0, 0], alpha0=1.2, iters=120
+    )
+
+    _, ax = plt.subplots()
+    ax.set_title("Toy Neural Net f(x) vs Iterations")
+    ax.set_xlabel("Iterations")
+    ax.set_ylabel("f(x) Neural Net")
+    ax.plot(range(len(losses)), losses, color="blue", marker="o", label="Loss")
+    ax.set_yscale("log")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    plt.savefig("./final/images/question1_II_loss_net.png")
+    plt.show()
+
+    alpha_arr = np.array([a.flatten() for a in alphas])
+    _, ax = plt.subplots()
+    ax.set_title("Toy Neural Net: Alpha vs Iterations")
+    ax.set_xlabel("Iterations")
+    ax.set_ylabel("Alpha")
+    ax.plot(
+        range(len(alpha_arr)),
+        alpha_arr[:, 0],
+        marker="o",
+        color="red",
+        label="alpha x1",
+    )
+    ax.plot(
+        range(len(alpha_arr)),
+        alpha_arr[:, 1],
+        marker="s",
+        color="green",
+        label="alpha x2",
+    )
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    plt.savefig("./final/images/question1_II_alpha_net.png")
+    plt.show()
+
+    space_x1 = np.linspace(-2, 4, 200)
+    space_x2 = np.linspace(-1, 5, 200)
+    X1, X2 = np.meshgrid(space_x1, space_x2)
+    Z = (X1 - 1) ** 2 + 5 * (X2 - 2) ** 2 + np.sin(X1)
+
+    traj = np.array([np.array(s).flatten() for s in steps])
+
+    _, ax = plt.subplots()
+    ax.set_title("Toy Neural Net: Contour and Adagrad Trajectory")
+    ax.set_xlabel("x1")
+    ax.set_ylabel("x2")
+    ax.contour(X1, X2, Z, levels=30, cmap="plasma")
+    ax.plot(traj[:, 0], traj[:, 1], marker="o", color="blue", label="Trajectory")
+    ax.scatter(
+        *traj[-1],
+        c="red",
+        zorder=5,
+        label=f"Last ({traj[-1, 0]:.3f}, {traj[-1, 1]:.3f})",
+    )
+    ax.legend()
+    plt.savefig("./final/images/question1_II_contour_net.png")
+    plt.show()
+
+    rosenbrock, grad_fn = setup_benchmark_3()
+    steps, losses, alphas = adagrad(
+        loss_fn=rosenbrock, grad_fn=grad_fn, x0=[0, 0], alpha0=0.45, iters=120
+    )
+
+    _, ax = plt.subplots()
+    ax.set_title("Rosenbrock f(x) vs Iterations")
+    ax.set_xlabel("Iterations")
+    ax.set_ylabel("f(x) Rosenbrock")
+    ax.plot(range(len(losses)), losses, color="blue", marker="o", label="Loss")
+    ax.set_yscale("log")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    plt.savefig("./final/images/question1_II_loss_rosenbrock.png")
+    plt.show()
+
+    alpha_arr = np.array([a.flatten() for a in alphas])
+    _, ax = plt.subplots()
+    ax.set_title("Rosenbrock: Alpha vs Iterations")
+    ax.set_xlabel("Iterations")
+    ax.set_ylabel("Alpha")
+    ax.plot(
+        range(len(alpha_arr)),
+        alpha_arr[:, 0],
+        marker="o",
+        color="red",
+        label="alpha x1",
+    )
+    ax.plot(
+        range(len(alpha_arr)),
+        alpha_arr[:, 1],
+        marker="s",
+        color="green",
+        label="alpha x2",
+    )
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    plt.savefig("./final/images/question1_II_alpha_rosenbrock.png")
+    plt.show()
+
+    space_x1 = np.linspace(-0.5, 2.0, 200)
+    space_x2 = np.linspace(-0.5, 2.5, 200)
+    X1, X2 = np.meshgrid(space_x1, space_x2)
+    Z = (1 - X1) ** 2 + 100 * (X2 - X1**2) ** 2
+
+    traj = np.array([np.array(s).flatten() for s in steps])
+
+    _, ax = plt.subplots()
+    ax.set_title("Rosenbrock: Contour and Adagrad Trajectory")
+    ax.set_xlabel("x1")
+    ax.set_ylabel("x2")
+    ax.contour(X1, X2, Z, levels=30, cmap="plasma")
+    ax.plot(traj[:, 0], traj[:, 1], marker="o", color="blue", label="Trajectory")
+    ax.scatter(
+        *traj[-1],
+        c="red",
+        zorder=5,
+        label=f"Last ({traj[-1, 0]:.3f}, {traj[-1, 1]:.3f})",
+    )
+    ax.legend()
+    plt.savefig("./final/images/question1_II_contour_rosenbrock.png")
+    plt.show()
+
+
+def question_1_III():
+    _, _, _, mse, grad_fn = setup_benchmark_1()
+
+    _, losses, alphas = rms_prop(
+        loss_fn=mse, grad_fn=grad_fn, x0=[0, 0], alpha=0.22, beta=0.9, iters=120
+    )
+
+    _, ax = plt.subplots()
+    ax.set_title("Linear Regression f(x) vs Iterations")
+    ax.set_xlabel("Iterations")
+    ax.set_ylabel("f(x) (MSE)")
+    ax.plot(range(len(losses)), losses, color="blue", marker="o", label="Loss")
+    ax.set_yscale("log")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    plt.savefig("./final/images/question1_III_loss_mse.png")
+    plt.show()
+
+    alpha_arr = np.array([a.flatten() for a in alphas])
+    _, ax = plt.subplots()
+    ax.set_title("Linear Regression: Alpha vs Iterations")
+    ax.set_xlabel("Iterations")
+    ax.set_ylabel("Alpha")
+    ax.plot(
+        range(len(alpha_arr)),
+        alpha_arr[:, 0],
+        marker="o",
+        color="red",
+        label="alpha θ0",
+    )
+    ax.plot(
+        range(len(alpha_arr)),
+        alpha_arr[:, 1],
+        marker="s",
+        color="green",
+        label="alpha θ1",
+    )
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    plt.savefig("./final/images/question1_II_alpha_mse.png")
+    plt.show()
+
+    net, grad_fn = setup_benchmark_2()
+
+    _, losses, alphas = rms_prop(
+        loss_fn=net, grad_fn=grad_fn, x0=[0, 0], alpha=0.14, beta=0.9, iters=120
+    )
+
+    _, ax = plt.subplots()
+    ax.set_title("Toy Neural Net f(x) vs Iterations")
+    ax.set_xlabel("Iterations")
+    ax.set_ylabel("f(x) Neural Net")
+    ax.plot(range(len(losses)), losses, color="blue", marker="o", label="Loss")
+    ax.set_yscale("log")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    plt.savefig("./final/images/question1_III_loss_net.png")
+    plt.show()
+
+    alpha_arr = np.array([a.flatten() for a in alphas])
+    _, ax = plt.subplots()
+    ax.set_title("Toy Neural Net: Alpha vs Iterations")
+    ax.set_xlabel("Iterations")
+    ax.set_ylabel("Alpha")
+    ax.plot(
+        range(len(alpha_arr)),
+        alpha_arr[:, 0],
+        marker="o",
+        color="red",
+        label="alpha x1",
+    )
+    ax.plot(
+        range(len(alpha_arr)),
+        alpha_arr[:, 1],
+        marker="s",
+        color="green",
+        label="alpha x2",
+    )
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    plt.savefig("./final/images/question1_III_alpha_net.png")
+    plt.show()
+
+
+if __name__ == "__main__":
+    if not os.path.exists("./final/images"):
+        os.makedirs("./final/images")
+
+    # question_1_I()
+    # question_1_II()
+    question_1_III()
