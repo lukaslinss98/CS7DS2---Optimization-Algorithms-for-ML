@@ -2,30 +2,25 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
-import sympy as sp
 
 
-def setup_benchmark_1():
+def setup_benchmark_1(noise_scaler=1):
     X = np.random.normal(0, 1, (1000, 2))
     theta_star = np.array([3, 4]).reshape(2, 1)
-    eps = np.random.normal(0, 0.1, (1000, 1))
+    eps = np.random.normal(0, 1 * noise_scaler, (1000, 1))
 
     Y = X @ theta_star + eps
 
-    def lr(theta):
-        return X @ theta
-
-    def mse(theta):
+    def mse(X, theta, y):
         m = len(X)
-        y_hat = lr(theta)
-        error = y_hat - Y
+        error = X @ theta - y
         return (1 / (2 * m)) * np.sum(error**2)
 
-    def grad_fn(theta):
+    def grad_fn(X, theta, y):
         m = len(X)
-        return (1 / m) * X.T @ ((X @ theta) - Y)
+        return (1 / m) * X.T @ (X @ theta - y)
 
-    return X, Y, lr, mse, grad_fn
+    return X, Y, mse, grad_fn
 
 
 def setup_benchmark_2():
@@ -161,12 +156,96 @@ def gradient_descent(loss_fn, grad_fn, alpha, x0, iters):
     return steps, losses
 
 
+def nesterov_momentum(loss_fn, grad_fn, x0, alpha, beta_max, iters):
+    xi = np.array([x0]).reshape(-1, 1)
+
+    z = 0
+
+    def step_fn(x, k):
+        nonlocal z
+        beta = min((k - 1) / (k + 2), beta_max)
+
+        z = beta * z - alpha * grad_fn(x + beta * z)
+        return -z
+
+    steps = [xi.copy()]
+    losses = [loss_fn(xi)]
+
+    for k in range(1, iters + 1):
+        step = step_fn(xi, k)
+        xi = xi - step
+
+        steps.append(xi.copy())
+        losses.append(loss_fn(xi))
+
+    return steps, losses
+
+
+def adam(loss_fn, grad_fn, x0, alpha, beta_1, beta_2, iters):
+    xi = np.array([x0]).reshape(-1, 1)
+    steps = [xi.copy()]
+    losses = [loss_fn(xi)]
+
+    v = np.zeros_like(xi)
+    m = np.zeros_like(xi)
+    for t in range(1, iters + 1):
+        grads = grad_fn(xi)
+
+        m = beta_1 * m + (1 - beta_1) * grads
+        v = beta_2 * v + (1 - beta_2) * grads**2
+
+        m_hat = m / (1 - beta_1**t)
+        v_hat = v / (1 - beta_2**t)
+
+        xi = xi - alpha * m_hat / (np.sqrt(v_hat) + 10**-8)
+        steps.append(xi.copy())
+        losses.append(loss_fn(xi))
+
+    return steps, losses
+
+
+def stochastic_gradient_descent(
+    loss_fn,
+    grad_fn,
+    X,
+    y,
+    x0,
+    alpha,
+    max_epochs,
+    batch_size,
+):
+    rng = np.random.default_rng(67)
+
+    xi = np.array(x0).reshape(-1, 1)
+    steps = [xi.copy()]
+    losses = [loss_fn(X, xi, y).item()]
+
+    epoch = 0
+    while epoch < max_epochs:
+        indices = rng.permutation(len(X))
+        X_shuff = X[indices]
+        y_shuff = y[indices]
+
+        for batch in range(0, len(X), batch_size):
+            X_batch = X_shuff[batch : batch + batch_size]
+            y_batch = y_shuff[batch : batch + batch_size]
+
+            step = alpha * grad_fn(X_batch, xi, y_batch)
+            xi = xi - step
+
+            steps.append(xi.copy())
+            losses.append(loss_fn(X, xi, y).item())
+        epoch += 1
+
+    return steps, losses
+
+
 def plot_loss(losses, title, ylabel, savepath):
     _, ax = plt.subplots()
     ax.set_title(title)
     ax.set_xlabel("Iterations")
     ax.set_ylabel(ylabel)
-    ax.plot(range(len(losses)), losses, color="blue", marker="o", label="Loss")
+    ax.plot(range(len(losses)), losses, color="blue", label="Loss")
     ax.set_yscale("log")
     ax.legend()
     ax.grid(True, alpha=0.3)
@@ -264,7 +343,9 @@ def plot_contour_rosenbrock(steps, title, savepath):
 
 
 def question_1_I():
-    _, _, _, mse, grad_fn = setup_benchmark_1()
+    X, Y, _mse, _grad = setup_benchmark_1()
+    mse = lambda theta: _mse(X, theta, Y)
+    grad_fn = lambda theta: _grad(X, theta, Y)
 
     _, losses, alphas = polyak(
         loss_fn=mse, grad_fn=grad_fn, x0=[0, 0], eps=10**-4, f_star=0, iters=120
@@ -327,7 +408,9 @@ def question_1_I():
 
 
 def question_1_II():
-    _, _, _, mse, grad_fn = setup_benchmark_1()
+    X, Y, _mse, _grad = setup_benchmark_1()
+    mse = lambda theta: _mse(X, theta, Y)
+    grad_fn = lambda theta: _grad(X, theta, Y)
 
     _, losses, alphas = adagrad(
         loss_fn=mse, grad_fn=grad_fn, x0=[0, 0], alpha0=1.8, iters=120
@@ -391,7 +474,9 @@ def question_1_II():
 
 
 def question_1_III():
-    _, _, _, mse, grad_fn = setup_benchmark_1()
+    X, Y, _mse, _grad = setup_benchmark_1()
+    mse = lambda theta: _mse(X, theta, Y)
+    grad_fn = lambda theta: _grad(X, theta, Y)
 
     _, losses, alphas = rms_prop(
         loss_fn=mse, grad_fn=grad_fn, x0=[0, 0], alpha=0.22, beta=0.9, iters=120
@@ -460,7 +545,9 @@ def question_1_III():
 
 
 def question_1_IV():
-    _, _, _, mse, grad_fn = setup_benchmark_1()
+    X, Y, _mse, _grad = setup_benchmark_1()
+    mse = lambda theta: _mse(X, theta, Y)
+    grad_fn = lambda theta: _grad(X, theta, Y)
 
     _, losses, alphas = heavy_ball(
         loss_fn=mse, grad_fn=grad_fn, x0=[0, 0], alpha=0.045, beta=0.88, iters=120
@@ -529,7 +616,9 @@ def question_1_IV():
 
 
 def baseline():
-    _, _, _, mse, grad_fn = setup_benchmark_1()
+    X, Y, _mse, _grad = setup_benchmark_1()
+    mse = lambda theta: _mse(X, theta, Y)
+    grad_fn = lambda theta: _grad(X, theta, Y)
 
     steps, losses = gradient_descent(
         loss_fn=mse, grad_fn=grad_fn, x0=[0, 0], alpha=0.08, iters=120
@@ -560,7 +649,7 @@ def baseline():
 
     rosenbrock, grad_fn = setup_benchmark_3()
 
-    steps, losse = gradient_descent(
+    steps, losses = gradient_descent(
         loss_fn=rosenbrock,
         grad_fn=grad_fn,
         x0=[0, 0],
@@ -580,6 +669,207 @@ def baseline():
     )
 
 
+def question_2_I():
+    X, Y, _mse, _grad = setup_benchmark_1()
+    mse = lambda theta: _mse(X, theta, Y)
+    grad_fn = lambda theta: _grad(X, theta, Y)
+
+    steps, losses = nesterov_momentum(
+        loss_fn=mse, grad_fn=grad_fn, x0=[0, 0], alpha=0.08, beta_max=0.9, iters=120
+    )
+
+    plot_loss(
+        losses,
+        "Linear Regression f(x) vs Iterations (Nesterov Momentum)",
+        "f(x) (MSE)",
+        "./final/images/question_2_I_loss_mse.png",
+    )
+
+    net, grad_fn = setup_benchmark_2()
+
+    steps, losses = nesterov_momentum(
+        loss_fn=net, grad_fn=grad_fn, x0=[0, 0], alpha=0.035, beta_max=0.92, iters=120
+    )
+
+    plot_loss(
+        losses,
+        "Toy Neural Net f(x) vs Iterations (Nesterov Momentum)",
+        "f(x) Neural Net",
+        "./final/images/question_2_I_loss_net.png",
+    )
+    plot_contour_net(
+        steps,
+        "Toy Neural Net: Contour and Nesterov Momentum Trajectory",
+        "./final/images/question_2_I_contour_net.png",
+    )
+
+    rosenbrock, grad_fn = setup_benchmark_3()
+
+    steps, losses = nesterov_momentum(
+        loss_fn=rosenbrock,
+        grad_fn=grad_fn,
+        x0=[0, 0],
+        alpha=0.0007,
+        beta_max=0.9,
+        iters=120,
+    )
+    plot_loss(
+        losses,
+        "Rosenbrock f(x) vs Iterations (Nesterov Momentum)",
+        "f(x) Rosenbrock",
+        "./final/images/question_2_I_loss_rosenbrock.png",
+    )
+    plot_contour_rosenbrock(
+        steps,
+        "Rosenbrock: Contour and Nesterov Momentum Trajectory",
+        "./final/images/question_2_I_contour_rosenbrock.png",
+    )
+
+
+def question_2_II():
+    X, Y, _mse, _grad = setup_benchmark_1()
+    mse = lambda theta: _mse(X, theta, Y)
+    grad_fn = lambda theta: _grad(X, theta, Y)
+
+    steps, losses = adam(
+        loss_fn=mse,
+        grad_fn=grad_fn,
+        x0=[0, 0],
+        alpha=0.12,
+        beta_1=0.82,
+        beta_2=0.999,
+        iters=150,
+    )
+    plot_loss(
+        losses,
+        "Linear Regression f(x) vs Iterations (Adam)",
+        "f(x) (MSE)",
+        "./final/images/question_2_II_loss_mse.png",
+    )
+
+    net, grad_fn = setup_benchmark_2()
+
+    steps, losses = adam(
+        loss_fn=net,
+        grad_fn=grad_fn,
+        x0=[0, 0],
+        alpha=0.12,
+        beta_1=0.82,
+        beta_2=0.999,
+        iters=150,
+    )
+    plot_loss(
+        losses,
+        "Toy Neural Net f(x) vs Iterations (Adam)",
+        "f(x) Neural Net",
+        "./final/images/question_2_II_loss_net.png",
+    )
+    plot_contour_net(
+        steps,
+        "Toy Neural Net: Contour and Adam Trajectory",
+        "./final/images/question_2_II_contour_net.png",
+    )
+
+    rosenbrock, grad_fn = setup_benchmark_3()
+
+    steps, losses = adam(
+        loss_fn=rosenbrock,
+        grad_fn=grad_fn,
+        x0=[0, 0],
+        alpha=0.12,
+        beta_1=0.82,
+        beta_2=0.999,
+        iters=150,
+    )
+    plot_loss(
+        losses,
+        "Rosenbrock f(x) vs Iterations (Adam)",
+        "f(x) Rosenbrock",
+        "./final/images/question_2_II_loss_rosenbrock.png",
+    )
+    plot_contour_rosenbrock(
+        steps,
+        "Rosenbrock: Contour and Adam Trajectory",
+        "./final/images/question_2_II_contour_rosenbrock.png",
+    )
+
+
+def question_2_III():
+    X, y, mse, grad_fn = setup_benchmark_1()
+
+    _, losses = stochastic_gradient_descent(
+        loss_fn=mse,
+        grad_fn=grad_fn,
+        X=X,
+        y=y,
+        x0=[0, 0],
+        alpha=0.06,
+        max_epochs=50,
+        batch_size=5,
+    )
+    plot_loss(
+        losses,
+        "Linear Regression f(x) vs Iterations (SGD) Batch Size 5",
+        "f(x) (MSE)",
+        "./final/images/question_2_III_loss_mse_batch_size_5.png",
+    )
+
+    _, losses = stochastic_gradient_descent(
+        loss_fn=mse,
+        grad_fn=grad_fn,
+        X=X,
+        y=y,
+        x0=[0, 0],
+        alpha=0.06,
+        max_epochs=50,
+        batch_size=40,
+    )
+    plot_loss(
+        losses,
+        "Linear Regression f(x) vs Iterations (SGD) Batch Size 40",
+        "f(x) (MSE)",
+        "./final/images/question_2_III_loss_mse_batch_size_40.png",
+    )
+
+
+def question_2_IV():
+    X, y, mse, grad_fn = setup_benchmark_1(noise_scaler=6)
+
+    _, losses = stochastic_gradient_descent(
+        loss_fn=mse,
+        grad_fn=grad_fn,
+        X=X,
+        y=y,
+        x0=[0, 0],
+        alpha=0.06,
+        max_epochs=50,
+        batch_size=5,
+    )
+    plot_loss(
+        losses,
+        "Linear Regression f(x) vs Iterations (SGD) Batch Size 5",
+        "f(x) (MSE)",
+        "./final/images/question_2_IV_loss_mse_batch_size_5.png",
+    )
+
+    _, losses = stochastic_gradient_descent(
+        loss_fn=mse,
+        grad_fn=grad_fn,
+        X=X,
+        y=y,
+        x0=[0, 0],
+        alpha=0.06,
+        max_epochs=50,
+        batch_size=40,
+    )
+    plot_loss(
+        losses,
+        "Linear Regression f(x) vs Iterations (SGD) Batch Size 40",
+        "f(x) (MSE)",
+        "./final/images/question_2_IV_loss_mse_batch_size_40.png",
+    )
+
+
 if __name__ == "__main__":
     if not os.path.exists("./final/images"):
         os.makedirs("./final/images")
@@ -589,3 +879,8 @@ if __name__ == "__main__":
     question_1_II()
     question_1_III()
     question_1_IV()
+
+    question_2_I()
+    question_2_II()
+    question_2_III()
+    question_2_IV()
