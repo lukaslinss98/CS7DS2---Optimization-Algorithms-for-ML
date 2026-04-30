@@ -2,11 +2,16 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
+from numpy.linalg import inv
 
 plt.rcParams["savefig.dpi"] = 150
+plt.rcParams["grid.alpha"] = 0.3
+plt.rcParams["image.cmap"] = "plasma"
+plt.rcParams["savefig.bbox"] = "tight"
+plt.rcParams["legend.fontsize"] = 8
 
 
-def setup_benchmark_1(noise_scaler=1):
+def setup_benchmark_A(noise_scaler=1):
     X = np.random.normal(0, 1, (1000, 2))
     theta_star = np.array([3, 4]).reshape(2, 1)
     eps = np.random.normal(0, 1 * noise_scaler, (1000, 1))
@@ -22,27 +27,56 @@ def setup_benchmark_1(noise_scaler=1):
         m = len(X)
         return (1 / m) * X.T @ (X @ theta - y)
 
-    return X, Y, mse, grad_fn
+    def hessian_fn(_):
+        m = len(X)
+        return (1 / m) * X.T @ X
+
+    return X, Y, mse, grad_fn, hessian_fn
 
 
-def setup_benchmark_2():
+def setup_benchmark_B():
 
     def net(x):
-        x1, x2 = x1, x2 = x[0, 0], x[1, 0]
+        x1, x2 = x[0, 0], x[1, 0]
         return ((x1 - 1) ** 2) + (5 * (x2 - 2) ** 2) + np.sin(x1)
 
     def grad_fn(x):
-        x1, x2 = x1, x2 = x[0, 0], x[1, 0]
+        x1, x2 = x[0, 0], x[1, 0]
         dfdx1 = 2 * (x1 - 1) + np.cos(x1)
         dfdx2 = 10 * (x2 - 2)
         return np.array([dfdx1, dfdx2]).reshape(-1, 1)
 
-    return net, grad_fn
+    def finite_diff(x, delta):
+        fx = net(x)
+        e1 = np.array([[delta], [0]])
+        e2 = np.array([[0], [delta]])
+
+        dfdx1 = (net(x + e1) - fx) / delta
+        dfdx2 = (net(x + e2) - fx) / delta
+        return np.array([dfdx1, dfdx2]).reshape(-1, 1)
+
+    def nesterov_random_dir(x, delta):
+        u = np.random.randn(2, 1)
+        u = u / np.linalg.norm(u)
+
+        fx = net(x)
+
+        return ((net(x + delta * u) - fx) / delta) * u
+
+    def hessian_fn(x):
+        x1 = x[0, 0]
+        d2fdx1dx1 = 2 - np.sin(x1)
+        d2fdx1dx2 = 0
+        d2fdx2dx2 = 10
+        d2fdx2dx1 = 0
+        return np.array([[d2fdx1dx1, d2fdx1dx2], [d2fdx2dx1, d2fdx2dx2]])
+
+    return net, grad_fn, hessian_fn, finite_diff, nesterov_random_dir
 
 
-def setup_benchmark_3():
+def setup_benchmark_C():
     def rosenbrock(x):
-        x1, x2 = x1, x2 = x[0, 0], x[1, 0]
+        x1, x2 = x[0, 0], x[1, 0]
         return ((1 - x1) ** 2) + (100 * (x2 - x1**2) ** 2)
 
     def grad_fn(x):
@@ -51,7 +85,15 @@ def setup_benchmark_3():
         dfdx2 = 200 * (x2 - x1**2)
         return np.array([dfdx1, dfdx2]).reshape(-1, 1)
 
-    return rosenbrock, grad_fn
+    def hessian_fn(x):
+        x1, x2 = x1, x2 = x[0, 0], x[1, 0]
+        d2fdx1dx1 = 2 + 1200 * x1**2 - 400 * x2
+        d2fdx1dx2 = -400 * x1
+        d2fdx2dx1 = -400 * x1
+        d2fdx2dx2 = 200
+        return np.array([[d2fdx1dx1, d2fdx1dx2], [d2fdx2dx1, d2fdx2dx2]])
+
+    return rosenbrock, grad_fn, hessian_fn
 
 
 def polyak(loss_fn, grad_fn, x0, f_star, eps, iters):
@@ -138,14 +180,17 @@ def heavy_ball(grad_fn, alpha, beta, x0, iters):
 def gradient_descent(grad_fn, alpha, x0, iters):
     xi = np.array(x0, dtype=np.dtypes.Float64DType).reshape(-1, 1)
     steps = [xi.copy()]
+    magnitudes = []
 
     for _ in range(iters):
         grads = grad_fn(xi)
-        xi -= alpha * grads
+        step = alpha * grads
+        xi -= step
 
         steps.append(xi.copy())
+        magnitudes.append(np.linalg.norm(step))
 
-    return steps
+    return steps, magnitudes
 
 
 def nesterov_momentum(grad_fn, x0, alpha, beta_max, iters):
@@ -228,6 +273,105 @@ def stochastic_gradient_descent(
     return steps, losses
 
 
+def newton_update(grad_fn, x0, hessian_fn, alpha, iters):
+    xi = np.array(x0).reshape(-1, 1)
+    steps = [xi.copy()]
+    magnitudes = []
+    I = np.eye(2, 2)
+    damping = 10**-8
+    for _ in range(iters):
+        step = alpha * inv(hessian_fn(xi) + damping * I) @ grad_fn(xi)
+        xi = xi - step
+
+        steps.append(xi.copy())
+        magnitudes.append(np.linalg.norm(step))
+
+    return steps, magnitudes
+
+
+def nelder_mead(fn, x0, simplex_step, iters):
+    n = len(x0)
+    simplex = [np.array(x0).reshape(-1, 1)]
+    for i in range(n):
+        e_i = np.zeros((n, 1))
+        e_i[i, 0] = 1
+        simplex.append(simplex[0] + simplex_step * e_i)
+
+    steps = [simplex[0].copy()]
+    alpha = 1.0
+    gamma = 2.0
+    rho = 0.5
+    sigma = 0.5
+    for _ in range(iters):
+        values = np.array([fn(p).item() for p in simplex])
+        ordering = np.argsort(values)
+        simplex = [simplex[i] for i in ordering]
+        centroid = sum(simplex[:-1]) / n
+        worst = simplex[-1]
+        reflected = centroid + alpha * (centroid - worst)
+
+        f_r = fn(reflected).item()
+        f_best = values[0]
+        f_worst = values[-1]
+        f_second_worst = values[-2]
+
+        if f_r < f_best:
+            expanded = centroid + gamma * (reflected - centroid)
+            simplex[-1] = expanded if fn(expanded).item() < f_r else reflected
+        elif f_r < f_second_worst:
+            simplex[-1] = reflected
+        else:
+            contracted = centroid + rho * (worst - centroid)
+            if fn(contracted).item() < f_worst:
+                simplex[-1] = contracted
+            else:
+                for j in range(1, n + 1):
+                    simplex[j] = simplex[0] + sigma * (simplex[j] - simplex[0])
+        steps.append(simplex[0].copy())
+
+    return steps
+
+
+def grid_search(loss_fn):
+    steps = []
+    fx_samples = []
+
+    x1_space = np.linspace(-2, 2, 55)
+    x2_space = np.linspace(-1, 3, 55)
+
+    for x1 in x1_space:
+        for x2 in x2_space:
+            x = np.array([x1, x2]).reshape(-1, 1)
+            fx = loss_fn(x)
+            steps.append((x1, x2))
+            fx_samples.append((fx, [x1, x2]))
+
+    return steps, fx_samples
+
+
+def projected_gradient_descent(
+    grad_fn,
+    alpha,
+    x0,
+    iters,
+):
+    xi = np.array(x0).reshape(-1, 1)
+
+    def projection(x):
+        x1, x2 = x[0, 0], x[1, 0]
+        x1 = np.clip(x1, 0.5, None)
+        return np.array([[x1], [x2]])
+
+    steps = [xi.copy()]
+
+    for _ in range(iters):
+        zs = xi - alpha * grad_fn(xi)
+        xi = projection(zs)
+        steps.append(xi.copy())
+
+    return steps
+
+
 def plot_loss(losses, title, ylabel, savepath):
     _, ax = plt.subplots()
     ax.set_title(title)
@@ -236,7 +380,7 @@ def plot_loss(losses, title, ylabel, savepath):
     ax.plot(range(len(losses)), losses, color="blue", label="Loss")
     ax.set_yscale("log")
     ax.legend()
-    ax.grid(True, alpha=0.3)
+    ax.grid(True)
     plt.savefig(savepath)
     plt.show()
 
@@ -248,7 +392,7 @@ def plot_scalar_alpha(alphas, title, savepath):
     ax.set_ylabel("Alpha")
     ax.plot(range(len(alphas)), alphas, color="blue", marker="o", label="Alpha")
     ax.legend()
-    ax.grid(True, alpha=0.3)
+    ax.grid(True)
     plt.savefig(savepath)
     plt.show()
 
@@ -274,7 +418,7 @@ def plot_contour_net(steps, title, savepath):
     ax.set_title(title)
     ax.set_xlabel("x1")
     ax.set_ylabel("x2")
-    ax.contour(X1, X2, Z, levels=30, cmap="plasma")
+    ax.contour(X1, X2, Z, levels=30)
     ax.plot(traj[:, 0], traj[:, 1], marker="o", color="blue", label="Trajectory")
     ax.scatter(
         *traj[-1],
@@ -299,7 +443,7 @@ def plot_contour_rosenbrock(steps, title, savepath):
     ax.set_title(title)
     ax.set_xlabel("x1")
     ax.set_ylabel("x2")
-    ax.contour(X1, X2, Z, levels=30, cmap="plasma")
+    ax.contour(X1, X2, Z, levels=30)
     ax.plot(traj[:, 0], traj[:, 1], marker="o", color="blue", label="Trajectory")
     ax.scatter(
         *traj[-1],
@@ -313,29 +457,26 @@ def plot_contour_rosenbrock(steps, title, savepath):
     plt.show()
 
 
-_BENCH_LABELS = ["Linear Regression", "Toy Neural Net", "Rosenbrock"]
-_BENCH_YLABELS = ["f(x) (MSE)", "f(x) Neural Net", "f(x) Rosenbrock"]
+BENCHMARK_LABELS = ["Linear Regression", "Toy Neural Net", "Rosenbrock"]
+BENCHMARK_YLABELS = ["f(x) (MSE)", "f(x) Neural Net", "f(x) Rosenbrock"]
 
 
-def plot_loss_subplots(
-    losses_per_bench, optimizer_name, savepath, gd_losses_per_bench=None
-):
+def plot_loss_subplots(losses_per_bench, optimizer_name, savepath, gd_losses_per_bench):
     fig, axes = plt.subplots(1, 3, figsize=(15, 4))
     for ax, losses, label, ylabel in zip(
-        axes, losses_per_bench, _BENCH_LABELS, _BENCH_YLABELS
+        axes, losses_per_bench, BENCHMARK_LABELS, BENCHMARK_YLABELS
     ):
         ax.set_title(label)
         ax.set_xlabel("Iterations")
         ax.set_ylabel(ylabel)
         ax.set_yscale("log")
-        ax.grid(True, alpha=0.3)
-    if gd_losses_per_bench is not None:
-        for ax, gd_losses in zip(axes, gd_losses_per_bench):
-            ax.plot(range(len(gd_losses)), gd_losses, color="green", label="GD")
+        ax.grid(True)
+    for ax, gd_losses in zip(axes, gd_losses_per_bench):
+        ax.plot(range(len(gd_losses)), gd_losses, color="green", label="GD")
     for ax, losses in zip(axes, losses_per_bench):
         ax.plot(range(len(losses)), losses, color="blue", label=optimizer_name)
     for ax in axes:
-        ax.legend(fontsize=8)
+        ax.legend()
     fig.suptitle(f"{optimizer_name}: Loss vs Iterations")
     plt.tight_layout()
     plt.savefig(savepath)
@@ -343,7 +484,7 @@ def plot_loss_subplots(
 
 
 def plot_contour_subplots(
-    steps_b2, steps_b3, optimizer_name, savepath, gd_steps_b2=None, gd_steps_b3=None
+    steps_b2, steps_b3, optimizer_name, savepath, gd_steps_b2, gd_steps_b3
 ):
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
 
@@ -373,7 +514,7 @@ def plot_contour_subplots(
     space_x2 = np.linspace(x2_lower, x2_upper, 200)
     X1, X2 = np.meshgrid(space_x1, space_x2)
     Z = (X1 - 1) ** 2 + 5 * (X2 - 2) ** 2 + np.sin(X1)
-    ax1.contour(X1, X2, Z, levels=30, cmap="plasma")
+    ax1.contour(X1, X2, Z, levels=30)
     ax1.plot(
         traj[:, 0],
         traj[:, 1],
@@ -385,15 +526,32 @@ def plot_contour_subplots(
     ax1.set_title("Toy Neural Net")
     ax1.set_xlabel("x1")
     ax1.set_ylabel("x2")
-    ax1.legend(fontsize=8)
+    ax1.legend()
 
-    sx1 = np.linspace(-1.5, 2.0, 200)
-    sx2 = np.linspace(-0.5, 2.5, 200)
-    X1, X2 = np.meshgrid(sx1, sx2)
-    Z = (1 - X1) ** 2 + 100 * (X2 - X1**2) ** 2
-    ax2.contour(X1, X2, Z, levels=30, cmap="plasma")
+    traj = np.array([np.array(s).flatten() for s in steps_b3])
+
+    all_traj = traj
     if gd_steps_b3 is not None:
         gd_traj = np.array([np.array(s).flatten() for s in gd_steps_b3])
+        all_traj = np.vstack([traj, gd_traj])
+
+    x1, x2 = all_traj[:, 0], all_traj[:, 1]
+    x1_min, x1_max = np.min(x1) * 1.05, np.max(x1) * 1.05
+    x2_min, x2_max = np.min(x2) * 1.05, np.max(x2) * 1.05
+
+    x1_lower = min(x1_min, -1.5)
+    x1_upper = max(x1_max, 2.0)
+
+    x2_lower = min(x2_min, -0.5)
+    x2_upper = max(x2_max, 2.5)
+
+    space_x1 = np.linspace(x1_lower, x1_upper, 200)
+    space_x2 = np.linspace(x2_lower, x2_upper, 200)
+    X1, X2 = np.meshgrid(space_x1, space_x2)
+    Z = (1 - X1) ** 2 + 100 * (X2 - X1**2) ** 2
+    ax2.contour(X1, X2, Z, levels=30)
+
+    if gd_steps_b3 is not None:
         ax2.plot(
             gd_traj[:, 0],
             gd_traj[:, 1],
@@ -402,7 +560,6 @@ def plot_contour_subplots(
             ms=4,
             label=f"GD ({gd_traj[-1, 0]:.2f}, {gd_traj[-1, 1]:.2f})",
         )
-    traj = np.array([np.array(s).flatten() for s in steps_b3])
     ax2.plot(
         traj[:, 0],
         traj[:, 1],
@@ -415,7 +572,7 @@ def plot_contour_subplots(
     ax2.set_title("Rosenbrock")
     ax2.set_xlabel("x1")
     ax2.set_ylabel("x2")
-    ax2.legend(fontsize=8)
+    ax2.legend()
 
     fig.suptitle(f"{optimizer_name}: Contour Trajectories")
     plt.tight_layout()
@@ -425,12 +582,12 @@ def plot_contour_subplots(
 
 def plot_scalar_alpha_subplots(alphas_per_bench, optimizer_name, savepath):
     fig, axes = plt.subplots(1, 3, figsize=(15, 4))
-    for ax, alphas, label in zip(axes, alphas_per_bench, _BENCH_LABELS):
+    for ax, alphas, label in zip(axes, alphas_per_bench, BENCHMARK_LABELS):
         ax.set_title(label)
         ax.set_xlabel("Iterations")
         ax.set_ylabel("Alpha")
         ax.plot(range(len(alphas)), alphas, color="blue")
-        ax.grid(True, alpha=0.3)
+        ax.grid(True)
     fig.suptitle(f"{optimizer_name}: Alpha vs Iterations")
     plt.tight_layout()
     plt.savefig(savepath)
@@ -445,7 +602,7 @@ def plot_vector_alpha_subplots(
 ):
     fig, axes = plt.subplots(1, 3, figsize=(15, 4))
     for ax, alphas, label, param_names in zip(
-        axes, alphas_per_bench, _BENCH_LABELS, param_names_per_bench
+        axes, alphas_per_bench, BENCHMARK_LABELS, param_names_per_bench
     ):
         alpha_arr = np.array([a.flatten() for a in alphas])
         ax.set_title(label)
@@ -463,38 +620,47 @@ def plot_vector_alpha_subplots(
             color="#d62728",
             label=f"α {param_names[1]}",
         )
-        ax.legend(fontsize=8)
-        ax.grid(True, alpha=0.3)
+        ax.legend()
+        ax.grid(True)
     fig.suptitle(f"{optimizer_name}: Alpha vs Iterations")
     plt.tight_layout()
     plt.savefig(savepath)
     plt.show()
 
 
-def _run_gd_baselines():
-    X, Y, _mse, _grad = setup_benchmark_1()
+def run_gd_baselines(iters=120):
+    X, Y, _mse, _grad, _ = setup_benchmark_A()
     mse = lambda theta: _mse(X, theta, Y)
     grad_fn = lambda theta: _grad(X, theta, Y)
-    gd_steps_1 = gradient_descent(grad_fn=grad_fn, x0=[0, 0], alpha=0.08, iters=120)
+    gd_steps_1, mag_1 = gradient_descent(
+        grad_fn=grad_fn, x0=[0, 0], alpha=0.08, iters=iters
+    )
     gd_losses_1 = [mse(s) for s in gd_steps_1]
 
-    net, grad_fn = setup_benchmark_2()
-    gd_steps_2 = gradient_descent(grad_fn=grad_fn, x0=[0, 0], alpha=0.06, iters=120)
+    net, grad_fn, _, _, _ = setup_benchmark_B()
+    gd_steps_2, mag_2 = gradient_descent(
+        grad_fn=grad_fn, x0=[0, 0], alpha=0.06, iters=iters
+    )
     gd_losses_2 = [net(s) for s in gd_steps_2]
 
-    rosenbrock, grad_fn = setup_benchmark_3()
-    gd_steps_3 = gradient_descent(
-        grad_fn=grad_fn, x0=[-1.25, 0.5], alpha=0.0012, iters=120
+    rosenbrock, grad_fn, _ = setup_benchmark_C()
+    gd_steps_3, mag_3 = gradient_descent(
+        grad_fn=grad_fn, x0=[-1.25, 0.5], alpha=0.001, iters=iters
     )
     gd_losses_3 = [rosenbrock(s) for s in gd_steps_3]
 
-    return [gd_losses_1, gd_losses_2, gd_losses_3], gd_steps_2, gd_steps_3
+    return (
+        [gd_losses_1, gd_losses_2, gd_losses_3],
+        gd_steps_2,
+        gd_steps_3,
+        [mag_1, mag_2, mag_3],
+    )
 
 
 def question_1_I():
-    gd_losses, gd_steps_2, gd_steps_3 = _run_gd_baselines()
+    gd_losses, gd_steps_2, gd_steps_3, _ = run_gd_baselines()
 
-    X, Y, _mse, _grad = setup_benchmark_1()
+    X, Y, _mse, _grad, _ = setup_benchmark_A()
     mse = lambda theta: _mse(X, theta, Y)
     grad_fn = lambda theta: _grad(X, theta, Y)
     steps_1, alphas_1 = polyak(
@@ -502,13 +668,13 @@ def question_1_I():
     )
     losses_1 = [mse(s) for s in steps_1]
 
-    net, grad_fn = setup_benchmark_2()
+    net, grad_fn, _, _, _ = setup_benchmark_B()
     steps_2, alphas_2 = polyak(
         loss_fn=net, grad_fn=grad_fn, x0=[0, 0], eps=1e-4, f_star=0, iters=120
     )
     losses_2 = [net(s) for s in steps_2]
 
-    rosenbrock, grad_fn = setup_benchmark_3()
+    rosenbrock, grad_fn, _ = setup_benchmark_C()
     steps_3, alphas_3 = polyak(
         loss_fn=rosenbrock,
         grad_fn=grad_fn,
@@ -541,19 +707,19 @@ def question_1_I():
 
 
 def question_1_II():
-    gd_losses, gd_steps_2, gd_steps_3 = _run_gd_baselines()
+    gd_losses, gd_steps_2, gd_steps_3, _ = run_gd_baselines()
 
-    X, Y, _mse, _grad = setup_benchmark_1()
+    X, Y, _mse, _grad, _ = setup_benchmark_A()
     mse = lambda theta: _mse(X, theta, Y)
     grad_fn = lambda theta: _grad(X, theta, Y)
     steps_1, alphas_1 = adagrad(grad_fn=grad_fn, x0=[0, 0], alpha0=1.8, iters=120)
     losses_1 = [mse(s) for s in steps_1]
 
-    net, grad_fn = setup_benchmark_2()
+    net, grad_fn, _, _, _ = setup_benchmark_B()
     steps_2, alphas_2 = adagrad(grad_fn=grad_fn, x0=[0, 0], alpha0=1.2, iters=120)
     losses_2 = [net(s) for s in steps_2]
 
-    rosenbrock, grad_fn = setup_benchmark_3()
+    rosenbrock, grad_fn, _ = setup_benchmark_C()
     steps_3, alphas_3 = adagrad(
         grad_fn=grad_fn, x0=[-1.25, 0.5], alpha0=0.45, iters=120
     )
@@ -581,9 +747,9 @@ def question_1_II():
 
 
 def question_1_III():
-    gd_losses, gd_steps_2, gd_steps_3 = _run_gd_baselines()
+    gd_losses, gd_steps_2, gd_steps_3, _ = run_gd_baselines()
 
-    X, Y, _mse, _grad = setup_benchmark_1()
+    X, Y, _mse, _grad, _ = setup_benchmark_A()
     mse = lambda theta: _mse(X, theta, Y)
     grad_fn = lambda theta: _grad(X, theta, Y)
     steps_1, alphas_1 = rms_prop(
@@ -591,13 +757,13 @@ def question_1_III():
     )
     losses_1 = [mse(s) for s in steps_1]
 
-    net, grad_fn = setup_benchmark_2()
+    net, grad_fn, _, _, _ = setup_benchmark_B()
     steps_2, alphas_2 = rms_prop(
         grad_fn=grad_fn, x0=[0, 0], alpha=0.14, beta=0.9, iters=120
     )
     losses_2 = [net(s) for s in steps_2]
 
-    rosenbrock, grad_fn = setup_benchmark_3()
+    rosenbrock, grad_fn, _ = setup_benchmark_C()
     steps_3, alphas_3 = rms_prop(
         grad_fn=grad_fn,
         x0=[-1.25, 0.5],
@@ -629,9 +795,9 @@ def question_1_III():
 
 
 def question_1_IV():
-    gd_losses, gd_steps_2, gd_steps_3 = _run_gd_baselines()
+    gd_losses, gd_steps_2, gd_steps_3, _ = run_gd_baselines()
 
-    X, Y, _mse, _grad = setup_benchmark_1()
+    X, Y, _mse, _grad, _ = setup_benchmark_A()
     mse = lambda theta: _mse(X, theta, Y)
     grad_fn = lambda theta: _grad(X, theta, Y)
     steps_1, _ = heavy_ball(
@@ -639,13 +805,13 @@ def question_1_IV():
     )
     losses_1 = [mse(s) for s in steps_1]
 
-    net, grad_fn = setup_benchmark_2()
+    net, grad_fn, _, _, _ = setup_benchmark_B()
     steps_2, _ = heavy_ball(
         grad_fn=grad_fn, x0=[0, 0], alpha=0.035, beta=0.90, iters=120
     )
     losses_2 = [net(s) for s in steps_2]
 
-    rosenbrock, grad_fn = setup_benchmark_3()
+    rosenbrock, grad_fn, _ = setup_benchmark_C()
     steps_3, _ = heavy_ball(
         grad_fn=grad_fn,
         x0=[-1.25, 0.5],
@@ -671,168 +837,97 @@ def question_1_IV():
     )
 
 
-def baseline():
-    X, Y, _mse, _grad = setup_benchmark_1()
-    mse = lambda theta: _mse(X, theta, Y)
-    grad_fn = lambda theta: _grad(X, theta, Y)
-
-    steps = gradient_descent(grad_fn=grad_fn, x0=[0, 0], alpha=0.08, iters=120)
-    plot_loss(
-        [mse(s) for s in steps],
-        "Linear Regression f(x) vs Iterations (GD)",
-        "f(x) (MSE)",
-        "./final/images/baseline_loss_mse.png",
-    )
-
-    net, grad_fn = setup_benchmark_2()
-
-    steps = gradient_descent(grad_fn=grad_fn, x0=[0, 0], alpha=0.06, iters=120)
-    plot_loss(
-        [net(s) for s in steps],
-        "Toy Neural Net f(x) vs Iterations (GD)",
-        "f(x) Neural Net",
-        "./final/images/basline_loss_net.png",
-    )
-    plot_contour_net(
-        steps,
-        "Toy Neural Net: Contour and Baseline GD Trajectory",
-        "./final/images/baseline_contour_net.png",
-    )
-
-    rosenbrock, grad_fn = setup_benchmark_3()
-
-    steps = gradient_descent(
-        grad_fn=grad_fn,
-        x0=[-1.25, 0.5],
-        alpha=0.0012,
-        iters=120,
-    )
-    plot_loss(
-        [rosenbrock(s) for s in steps],
-        "Rosenbrock f(x) vs Iterations (GD)",
-        "f(x) Rosenbrock",
-        "./final/images/baseline_loss_rosenbrock.png",
-    )
-    plot_contour_rosenbrock(
-        steps,
-        "Rosenbrock: Contour and Baseline GD Trajectory",
-        "./final/images/baseline_contour_rosenbrock.png",
-    )
-
-
 def question_2_I():
-    X, Y, _mse, _grad = setup_benchmark_1()
+    gd_losses, gd_steps_2, gd_steps_3, _ = run_gd_baselines(iters=150)
+
+    X, Y, _mse, _grad, _ = setup_benchmark_A()
     mse = lambda theta: _mse(X, theta, Y)
     grad_fn = lambda theta: _grad(X, theta, Y)
-
-    steps = nesterov_momentum(
-        grad_fn=grad_fn, x0=[0, 0], alpha=0.08, beta_max=0.9, iters=120
+    steps_1 = nesterov_momentum(
+        grad_fn=grad_fn, x0=[0, 0], alpha=0.08, beta_max=0.9, iters=150
     )
-    plot_loss(
-        [mse(s) for s in steps],
-        "Linear Regression f(x) vs Iterations (Nesterov Momentum)",
-        "f(x) (MSE)",
-        "./final/images/question_2_I_loss_mse.png",
-    )
+    losses_1 = [mse(s) for s in steps_1]
 
-    net, grad_fn = setup_benchmark_2()
-
-    steps = nesterov_momentum(
-        grad_fn=grad_fn, x0=[0, 0], alpha=0.035, beta_max=0.92, iters=120
+    net, grad_fn, _, _, _ = setup_benchmark_B()
+    steps_2 = nesterov_momentum(
+        grad_fn=grad_fn, x0=[0, 0], alpha=0.035, beta_max=0.92, iters=150
     )
-    plot_loss(
-        [net(s) for s in steps],
-        "Toy Neural Net f(x) vs Iterations (Nesterov Momentum)",
-        "f(x) Neural Net",
-        "./final/images/question_2_I_loss_net.png",
-    )
-    plot_contour_net(
-        steps,
-        "Toy Neural Net: Contour and Nesterov Momentum Trajectory",
-        "./final/images/question_2_I_contour_net.png",
-    )
+    losses_2 = [net(s) for s in steps_2]
 
-    rosenbrock, grad_fn = setup_benchmark_3()
-
-    steps = nesterov_momentum(
+    rosenbrock, grad_fn, _ = setup_benchmark_C()
+    steps_3 = nesterov_momentum(
         grad_fn=grad_fn,
         x0=[-1.25, 0.5],
         alpha=0.0007,
         beta_max=0.9,
-        iters=120,
+        iters=150,
     )
-    plot_loss(
-        [rosenbrock(s) for s in steps],
-        "Rosenbrock f(x) vs Iterations (Nesterov Momentum)",
-        "f(x) Rosenbrock",
-        "./final/images/question_2_I_loss_rosenbrock.png",
+    losses_3 = [rosenbrock(s) for s in steps_3]
+
+    plot_loss_subplots(
+        [losses_1, losses_2, losses_3],
+        "Nesterov",
+        "./final/images/question_2_I_losses.png",
+        gd_losses_per_bench=gd_losses,
     )
-    plot_contour_rosenbrock(
-        steps,
-        "Rosenbrock: Contour and Nesterov Momentum Trajectory",
-        "./final/images/question_2_I_contour_rosenbrock.png",
+    plot_contour_subplots(
+        steps_2,
+        steps_3,
+        "Nesterov",
+        "./final/images/question_2_I_contours.png",
+        gd_steps_b2=gd_steps_2,
+        gd_steps_b3=gd_steps_3,
     )
 
 
 def question_2_II():
-    X, Y, _mse, _grad = setup_benchmark_1()
+    gd_losses, gd_steps_2, gd_steps_3, _ = run_gd_baselines(iters=150)
+
+    X, Y, _mse, _grad, _ = setup_benchmark_A()
     mse = lambda theta: _mse(X, theta, Y)
     grad_fn = lambda theta: _grad(X, theta, Y)
-
-    steps = adam(
+    steps_1 = adam(
         grad_fn=grad_fn, x0=[0, 0], alpha=0.12, beta_1=0.82, beta_2=0.999, iters=150
     )
-    plot_loss(
-        [mse(s) for s in steps],
-        "Linear Regression f(x) vs Iterations (Adam)",
-        "f(x) (MSE)",
-        "./final/images/question_2_II_loss_mse.png",
-    )
+    losses_1 = [mse(s) for s in steps_1]
 
-    net, grad_fn = setup_benchmark_2()
-
-    steps = adam(
-        grad_fn=grad_fn, x0=[0, 0], alpha=0.12, beta_1=0.82, beta_2=0.999, iters=150
+    net, grad_fn, _, _, _ = setup_benchmark_B()
+    steps_2 = adam(
+        grad_fn=grad_fn, x0=[0, 0], alpha=0.08, beta_1=0.82, beta_2=0.999, iters=150
     )
-    plot_loss(
-        [net(s) for s in steps],
-        "Toy Neural Net f(x) vs Iterations (Adam)",
-        "f(x) Neural Net",
-        "./final/images/question_2_II_loss_net.png",
-    )
-    plot_contour_net(
-        steps,
-        "Toy Neural Net: Contour and Adam Trajectory",
-        "./final/images/question_2_II_contour_net.png",
-    )
+    losses_2 = [net(s) for s in steps_2]
 
-    rosenbrock, grad_fn = setup_benchmark_3()
-
-    steps = adam(
+    rosenbrock, grad_fn, _ = setup_benchmark_C()
+    steps_3 = adam(
         grad_fn=grad_fn,
         x0=[-1.25, 0.5],
-        alpha=0.12,
-        beta_1=0.82,
+        alpha=0.006,
+        beta_1=0.8,
         beta_2=0.999,
         iters=150,
     )
-    plot_loss(
-        [rosenbrock(s) for s in steps],
-        "Rosenbrock f(x) vs Iterations (Adam)",
-        "f(x) Rosenbrock",
-        "./final/images/question_2_II_loss_rosenbrock.png",
+    losses_3 = [rosenbrock(s) for s in steps_3]
+
+    plot_loss_subplots(
+        [losses_1, losses_2, losses_3],
+        "Adam",
+        "./final/images/question_2_II_losses.png",
+        gd_losses_per_bench=gd_losses,
     )
-    plot_contour_rosenbrock(
-        steps,
-        "Rosenbrock: Contour and Adam Trajectory",
-        "./final/images/question_2_II_contour_rosenbrock.png",
+    plot_contour_subplots(
+        steps_2,
+        steps_3,
+        "Adam",
+        "./final/images/question_2_II_contours.png",
+        gd_steps_b2=gd_steps_2,
+        gd_steps_b3=gd_steps_3,
     )
 
 
 def question_2_III():
-    X, y, mse, grad_fn = setup_benchmark_1()
+    X, y, mse, grad_fn, _ = setup_benchmark_A()
 
-    _, losses = stochastic_gradient_descent(
+    _, losses_batch_5 = stochastic_gradient_descent(
         loss_fn=mse,
         grad_fn=grad_fn,
         X=X,
@@ -842,14 +937,7 @@ def question_2_III():
         max_epochs=50,
         batch_size=5,
     )
-    plot_loss(
-        losses,
-        "Linear Regression f(x) vs Iterations (SGD) Batch Size 5",
-        "f(x) (MSE)",
-        "./final/images/question_2_III_loss_mse_batch_size_5.png",
-    )
-
-    _, losses = stochastic_gradient_descent(
+    _, losses_batch_40 = stochastic_gradient_descent(
         loss_fn=mse,
         grad_fn=grad_fn,
         X=X,
@@ -859,18 +947,32 @@ def question_2_III():
         max_epochs=50,
         batch_size=40,
     )
-    plot_loss(
-        losses,
-        "Linear Regression f(x) vs Iterations (SGD) Batch Size 40",
-        "f(x) (MSE)",
-        "./final/images/question_2_III_loss_mse_batch_size_40.png",
-    )
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+    ax1.set_title("SGD Batch Size 5")
+    ax1.set_xlabel("Iterations")
+    ax1.set_ylabel("f(x) (MSE)")
+    ax1.plot(range(len(losses_batch_5)), losses_batch_5, color="blue")
+    ax1.set_yscale("log")
+    ax1.grid(True)
+
+    ax2.set_title("SGD Batch Size 40")
+    ax2.set_xlabel("Iterations")
+    ax2.set_ylabel("f(x) (MSE)")
+    ax2.plot(range(len(losses_batch_40)), losses_batch_40, color="red")
+    ax2.set_yscale("log")
+    ax2.grid(True)
+
+    fig.suptitle("Linear Regression f(x) vs Iterations (SGD)")
+    plt.tight_layout()
+    plt.savefig("./final/images/question_2_III_losses.png")
+    plt.show()
 
 
 def question_2_IV():
-    X, y, mse, grad_fn = setup_benchmark_1(noise_scaler=6)
+    X, y, mse, grad_fn, _ = setup_benchmark_A(noise_scaler=6)
 
-    _, losses = stochastic_gradient_descent(
+    _, losses_batch_5 = stochastic_gradient_descent(
         loss_fn=mse,
         grad_fn=grad_fn,
         X=X,
@@ -880,14 +982,7 @@ def question_2_IV():
         max_epochs=50,
         batch_size=5,
     )
-    plot_loss(
-        losses,
-        "Linear Regression f(x) vs Iterations (SGD) Batch Size 5",
-        "f(x) (MSE)",
-        "./final/images/question_2_IV_loss_mse_batch_size_5.png",
-    )
-
-    _, losses = stochastic_gradient_descent(
+    _, losses_batch_40 = stochastic_gradient_descent(
         loss_fn=mse,
         grad_fn=grad_fn,
         X=X,
@@ -897,25 +992,440 @@ def question_2_IV():
         max_epochs=50,
         batch_size=40,
     )
-    plot_loss(
-        losses,
-        "Linear Regression f(x) vs Iterations (SGD) Batch Size 40",
-        "f(x) (MSE)",
-        "./final/images/question_2_IV_loss_mse_batch_size_40.png",
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+    ax1.set_title("SGD Batch Size 5")
+    ax1.set_xlabel("Iterations")
+    ax1.set_ylabel("f(x) (MSE)")
+    ax1.plot(range(len(losses_batch_5)), losses_batch_5, color="blue")
+    ax1.set_yscale("log")
+    ax1.grid(True)
+
+    ax2.set_title("SGD Batch Size 40")
+    ax2.set_xlabel("Iterations")
+    ax2.set_ylabel("f(x) (MSE)")
+    ax2.plot(range(len(losses_batch_40)), losses_batch_40, color="red")
+    ax2.set_yscale("log")
+    ax2.grid(True)
+
+    fig.suptitle("Linear Regression f(x) vs Iterations (SGD) Noise Scaler 6")
+    plt.tight_layout()
+    plt.savefig("./final/images/question_2_IV_losses.png")
+    plt.show()
+
+
+def question_3_I():
+    g = lambda x: x**4
+    dgdx = lambda x: 4 * x**3
+    d2gdx = lambda x: 12 * x**2
+    x0 = 0.25
+    first_order_approx = lambda x: g(x0) + dgdx(x0) * (x - x0)
+    second_order_approx = lambda x: (
+        g(x0) + dgdx(x0) * (x - x0) + 0.5 * d2gdx(0.25) * (x - x0) ** 2
     )
+
+    space = np.linspace(-1, 1, 400)
+
+    _, ax = plt.subplots()
+    ax.set_title("First- and Second-Order Approximations of $g(x)=x^4$ at $x=0.25$")
+    ax.set_xlabel("x")
+    ax.set_ylabel("g(x)")
+    ax.plot(space, g(space), color="blue", label="$g(x)=x^4$")
+    ax.plot(
+        space,
+        first_order_approx(space),
+        color="purple",
+        linestyle="--",
+        label="First Order Approximation",
+    )
+    ax.plot(
+        space,
+        second_order_approx(space),
+        color="red",
+        linestyle="--",
+        label="Second Order Approximation",
+    )
+    ax.scatter([x0], [g(x0)], color="red", zorder=5, label="x0")
+    ax.legend()
+    ax.grid(True)
+    plt.savefig("./final/images/question_3_I_approximations.png")
+    plt.show()
+
+
+def question_3_II():
+    gd_losses, gd_steps_2, gd_steps_3, magnitudes = run_gd_baselines(iters=80)
+
+    X, Y, mse, grad_fn, hessian_fn = setup_benchmark_A()
+    steps_1, magnitudes_mse = newton_update(
+        grad_fn=lambda theta: grad_fn(X, theta, Y),
+        x0=[0, 0],
+        hessian_fn=hessian_fn,
+        iters=20,
+        alpha=1.0,
+    )
+    losses_1 = [mse(X, step, Y) for step in steps_1]
+
+    net, grad_fn, hessian_fn, _, _ = setup_benchmark_B()
+    steps_2, magnitudes_net = newton_update(
+        grad_fn=grad_fn,
+        x0=[0, 0],
+        hessian_fn=hessian_fn,
+        iters=20,
+        alpha=0.85,
+    )
+    losses_2 = [net(s) for s in steps_2]
+
+    rosenbrock, grad_fn, hessian_fn = setup_benchmark_C()
+    steps_3, magnitudes_rosenbrock = newton_update(
+        grad_fn=grad_fn,
+        x0=[-1.25, 0.5],
+        hessian_fn=hessian_fn,
+        iters=20,
+        alpha=0.22,
+    )
+    losses_3 = [rosenbrock(s) for s in steps_3]
+
+    plot_loss_subplots(
+        [losses_1, losses_2, losses_3],
+        "Newton Update",
+        "./final/images/question_3_II_losses.png",
+        gd_losses_per_bench=gd_losses,
+    )
+    plot_contour_subplots(
+        steps_2,
+        steps_3,
+        "Newton Update",
+        "./final/images/question_3_II_contours.png",
+        gd_steps_b2=gd_steps_2,
+        gd_steps_b3=gd_steps_3,
+    )
+
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+    newton_mags = [magnitudes_mse, magnitudes_net, magnitudes_rosenbrock]
+    for ax, gd_mag, new_mag, label in zip(
+        axes, magnitudes, newton_mags, BENCHMARK_LABELS
+    ):
+        ax.set_title(label)
+        ax.set_xlabel("Iterations")
+        ax.set_ylabel("Step Magnitude")
+        ax.plot(range(len(gd_mag)), gd_mag, color="green", label="GD")
+        ax.plot(range(len(new_mag)), new_mag, color="blue", label="Newton")
+        ax.set_yscale("log")
+        ax.legend()
+        ax.grid(True)
+    fig.suptitle("Newton Update vs GD: Step Magnitude vs Iterations")
+    plt.tight_layout()
+    plt.savefig("./final/images/question_3_II_magnitudes.png")
+    plt.show()
+
+
+def question_4a_I():
+    gd_losses, gd_steps_2, _, _ = run_gd_baselines(iters=120)
+
+    net, _, _, finite_diff, _ = setup_benchmark_B()
+    steps_delta_good, _ = gradient_descent(
+        grad_fn=lambda x: finite_diff(x, delta=0.05),
+        x0=[0, 0],
+        iters=120,
+        alpha=0.08,
+    )
+    losses_delta_good = [net(s) for s in steps_delta_good]
+    steps_delta_poor, _ = gradient_descent(
+        grad_fn=lambda x: finite_diff(x, delta=0.8),
+        x0=[0, 0],
+        iters=120,
+        alpha=0.08,
+    )
+    losses_delta_poor = [net(s) for s in steps_delta_poor]
+
+    _, ax = plt.subplots()
+    ax.set_title("Toy Neural Net f(x) vs Iterations (Finite Difference)")
+    ax.set_xlabel("Iterations")
+    ax.set_ylabel("f(x) Neural Net")
+    ax.plot(range(len(gd_losses[1])), gd_losses[1], color="green", label="GD")
+    ax.plot(
+        range(len(losses_delta_good)),
+        losses_delta_good,
+        color="blue",
+        label="Finite Diff δ=0.05",
+    )
+    ax.plot(
+        range(len(losses_delta_poor)),
+        losses_delta_poor,
+        color="orange",
+        label="Finite Diff δ=0.8",
+    )
+    ax.set_yscale("log")
+    ax.legend()
+    ax.grid(True)
+    plt.savefig("./final/images/question_4a_I_losses.png")
+    plt.show()
+
+    gd_traj = np.array([np.array(s).flatten() for s in gd_steps_2])
+    traj_good = np.array([np.array(s).flatten() for s in steps_delta_good])
+    traj_poor = np.array([np.array(s).flatten() for s in steps_delta_poor])
+    all_traj = np.vstack([gd_traj, traj_good, traj_poor])
+    x1_min = np.min(all_traj[:, 0]) * 1.05
+    x1_max = np.max(all_traj[:, 0]) * 1.05
+    x2_min = np.min(all_traj[:, 1]) * 1.05
+    x2_max = np.max(all_traj[:, 1]) * 1.05
+    space_x1 = np.linspace(min(x1_min, -2), max(x1_max, 4), 200)
+    space_x2 = np.linspace(min(x2_min, -1), max(x2_max, 5), 200)
+    X1, X2 = np.meshgrid(space_x1, space_x2)
+    Z = (X1 - 1) ** 2 + 5 * (X2 - 2) ** 2 + np.sin(X1)
+    _, ax = plt.subplots()
+    ax.set_title("Toy Neural Net: Finite Difference Contour Trajectories")
+    ax.set_xlabel("x1")
+    ax.set_ylabel("x2")
+    ax.contour(X1, X2, Z, levels=30)
+    ax.plot(
+        gd_traj[:, 0],
+        gd_traj[:, 1],
+        color="green",
+        marker="o",
+        ms=4,
+        label=f"GD ({gd_traj[-1, 0]:.2f}, {gd_traj[-1, 1]:.2f})",
+    )
+    ax.plot(
+        traj_good[:, 0],
+        traj_good[:, 1],
+        color="blue",
+        marker="o",
+        ms=4,
+        label=f"Finite Diff δ=0.05 ({traj_good[-1, 0]:.2f}, {traj_good[-1, 1]:.2f})",
+    )
+    ax.plot(
+        traj_poor[:, 0],
+        traj_poor[:, 1],
+        color="orange",
+        marker="o",
+        ms=4,
+        label=f"Finite Diff δ=0.8 ({traj_poor[-1, 0]:.2f}, {traj_poor[-1, 1]:.2f})",
+    )
+    ax.legend()
+    ax.grid(True)
+    plt.savefig("./final/images/question_4a_I_contours.png")
+    plt.show()
+
+
+def question_4a_II():
+    gd_losses, gd_steps_2, _, _ = run_gd_baselines(iters=220)
+
+    net, _, _, _, nesterov_random_dir = setup_benchmark_B()
+    steps_delta_good, _ = gradient_descent(
+        grad_fn=lambda x: nesterov_random_dir(x, delta=0.05),
+        x0=[0, 0],
+        iters=220,
+        alpha=0.025,
+    )
+    losses_delta_good = [net(s) for s in steps_delta_good]
+
+    _, ax = plt.subplots()
+    ax.set_title("Toy Neural Net f(x) vs Iterations (Nesterov Random Direction)")
+    ax.set_xlabel("Iterations")
+    ax.set_ylabel("f(x) Neural Net")
+    ax.set_yscale("log")
+    ax.plot(range(len(gd_losses[1])), gd_losses[1], color="green", label="GD")
+    ax.plot(
+        range(len(losses_delta_good)),
+        losses_delta_good,
+        color="blue",
+        label="Nesterov δ=0.05",
+    )
+    ax.legend()
+    ax.grid(True)
+    plt.savefig("./final/images/question_4a_II_losses.png")
+    plt.show()
+
+    gd_traj = np.array([np.array(s).flatten() for s in gd_steps_2])
+    traj_good = np.array([np.array(s).flatten() for s in steps_delta_good])
+    all_traj = np.vstack([gd_traj, traj_good])
+    x1_min = np.min(all_traj[:, 0]) * 1.05
+    x1_max = np.max(all_traj[:, 0]) * 1.05
+    x2_min = np.min(all_traj[:, 1]) * 1.05
+    x2_max = np.max(all_traj[:, 1]) * 1.05
+    space_x1 = np.linspace(min(x1_min, -2), max(x1_max, 4), 200)
+    space_x2 = np.linspace(min(x2_min, -1), max(x2_max, 5), 200)
+    X1, X2 = np.meshgrid(space_x1, space_x2)
+    Z = (X1 - 1) ** 2 + 5 * (X2 - 2) ** 2 + np.sin(X1)
+
+    _, ax = plt.subplots()
+    ax.set_title("Toy Neural Net: Nesterov Random Direction Contour Trajectories")
+    ax.set_xlabel("x1")
+    ax.set_ylabel("x2")
+    ax.contour(X1, X2, Z, levels=30)
+    ax.plot(
+        gd_traj[:, 0],
+        gd_traj[:, 1],
+        color="green",
+        marker="o",
+        ms=4,
+        label=f"GD ({gd_traj[-1, 0]:.2f}, {gd_traj[-1, 1]:.2f})",
+    )
+    ax.plot(
+        traj_good[:, 0],
+        traj_good[:, 1],
+        color="blue",
+        marker="o",
+        ms=4,
+        label=f"Nesterov δ=0.05 ({traj_good[-1, 0]:.2f}, {traj_good[-1, 1]:.2f})",
+    )
+    ax.legend()
+    ax.grid(True)
+    plt.savefig("./final/images/question_4a_II_contours.png")
+    plt.show()
+
+
+def question_4b_I():
+    gd_losses, _, gd_steps_3, _ = run_gd_baselines(iters=160)
+
+    rosenbrock, _, _ = setup_benchmark_C()
+    steps = nelder_mead(
+        fn=rosenbrock,
+        x0=[-1.25, 0.5],
+        simplex_step=0.35,
+        iters=160,
+    )
+    losses_nm = [rosenbrock(s) for s in steps]
+    _, ax = plt.subplots()
+    ax.set_title("Rosenbrock f(x) vs Iterations (Nelder-Mead)")
+    ax.set_xlabel("Iterations")
+    ax.set_ylabel("f(x) Rosenbrock")
+    ax.plot(range(len(gd_losses[2])), gd_losses[2], color="green", label="GD")
+    ax.plot(range(len(losses_nm)), losses_nm, color="blue", label="Nelder-Mead")
+    ax.set_yscale("log")
+    ax.legend()
+    ax.grid(True)
+    plt.savefig("./final/images/question_4b_I_losses.png")
+    plt.show()
+
+    traj_nm = np.array([np.array(s).flatten() for s in steps])
+    gd_traj = np.array([np.array(s).flatten() for s in gd_steps_3])
+    all_traj = np.vstack([gd_traj, traj_nm])
+    x1_min = np.min(all_traj[:, 0]) * 1.05
+    x1_max = np.max(all_traj[:, 0]) * 1.05
+    x2_min = np.min(all_traj[:, 1]) * 1.05
+    x2_max = np.max(all_traj[:, 1]) * 1.05
+    space_x1 = np.linspace(min(x1_min, -1.5), max(x1_max, 2.0), 200)
+    space_x2 = np.linspace(min(x2_min, -0.5), max(x2_max, 2.5), 200)
+    X1, X2 = np.meshgrid(space_x1, space_x2)
+    Z = (1 - X1) ** 2 + 100 * (X2 - X1**2) ** 2
+    _, ax = plt.subplots()
+    ax.set_title("Rosenbrock: Nelder-Mead Contour Trajectory")
+    ax.set_xlabel("x1")
+    ax.set_ylabel("x2")
+    ax.contour(X1, X2, Z, levels=30)
+    ax.plot(
+        gd_traj[:, 0],
+        gd_traj[:, 1],
+        color="green",
+        marker="o",
+        ms=4,
+        label=f"GD ({gd_traj[-1, 0]:.2f}, {gd_traj[-1, 1]:.2f})",
+    )
+    ax.plot(
+        traj_nm[:, 0],
+        traj_nm[:, 1],
+        color="blue",
+        marker="o",
+        ms=4,
+        label=f"Nelder-Mead ({traj_nm[-1, 0]:.2f}, {traj_nm[-1, 1]:.2f})",
+    )
+    ax.scatter(1, 1, c="black", zorder=5, label="Global min (1,1)")
+    ax.legend()
+    ax.grid(True)
+    plt.savefig("./final/images/question_4b_I_contours.png")
+    plt.show()
+
+
+def question_4b_II():
+    rosenbrock, _, _ = setup_benchmark_C()
+    steps, fx_samples = grid_search(loss_fn=rosenbrock)
+
+    fx_values = np.array([fx for fx, _ in fx_samples])
+    best_idx = np.argmin(fx_values)
+    best_coord = steps[best_idx]
+    running_min = np.minimum.accumulate(fx_values)
+
+    x1_coords = np.array([s[0] for s in steps])
+    x2_coords = np.array([s[1] for s in steps])
+    x1_min, x1_max = np.min(x1_coords) * 1.05, np.max(x1_coords) * 1.05
+    x2_min, x2_max = np.min(x2_coords) * 1.05, np.max(x2_coords) * 1.05
+    space_x1 = np.linspace(min(x1_min, -1.5), max(x1_max, 2.0), 200)
+    space_x2 = np.linspace(min(x2_min, -0.5), max(x2_max, 2.5), 200)
+    X1, X2 = np.meshgrid(space_x1, space_x2)
+    Z = (1 - X1) ** 2 + 100 * (X2 - X1**2) ** 2
+
+    _, ax = plt.subplots()
+    ax.set_title("Rosenbrock: Grid Search Sampling Pattern")
+    ax.set_xlabel("x1")
+    ax.set_ylabel("x2")
+    ax.contour(X1, X2, Z, levels=30)
+
+    ax.scatter(
+        x1_coords,
+        x2_coords,
+        c="blue",
+        s=5,
+        marker="o",
+        alpha=0.5,
+        label=f"Grid points ({len(steps)} samples)",
+        zorder=5,
+    )
+
+    ax.scatter(
+        best_coord[0],
+        best_coord[1],
+        c="red",
+        s=80,
+        marker="x",
+        linewidths=2,
+        zorder=6,
+        label=f"Best ({best_coord[0]:.2f}, {best_coord[1]:.2f})",
+    )
+
+    ax.scatter(1, 1, c="black", zorder=7, label="Global min (1,1)")
+    ax.legend()
+    ax.grid(True)
+    plt.savefig("./final/images/question_4b_II_contours.png")
+    plt.show()
+
+    _, ax = plt.subplots()
+    ax.set_title("Rosenbrock f(x) vs Samples (Grid Search)")
+    ax.set_xlabel("Samples")
+    ax.set_ylabel("f(x) Rosenbrock")
+    ax.plot(range(len(running_min)), running_min, color="blue", label="Best so far")
+    ax.set_yscale("log")
+    ax.legend()
+    ax.grid(True)
+    plt.savefig("./final/images/question_4b_II_best_so_far.png")
+    plt.show()
+
+
+def question_5_I():
+    pass
 
 
 if __name__ == "__main__":
     if not os.path.exists("./final/images"):
         os.makedirs("./final/images")
 
-    # baseline()
     # question_1_I()
     # question_1_II()
     # question_1_III()
     # question_1_IV()
     #
-    question_2_I()
+    # question_2_I()
     # question_2_II()
     # question_2_III()
     # question_2_IV()
+
+    # question_3_I()
+    # question_3_II()
+
+    # question_4a_I()
+    # question_4a_II()
+    # question_4b_I()
+    # question_4b_II()
+
+    question_5_I()

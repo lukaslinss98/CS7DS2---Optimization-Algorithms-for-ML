@@ -9,17 +9,17 @@ from numpy.typing import NDArray
 
 plt.rcParams.update(
     {
-        'figure.figsize': (12, 6),
-        'axes.grid': True,
-        'grid.alpha': 0.3,
-        'axes.titlesize': 14,
-        'axes.labelsize': 14,
-        'legend.fontsize': 9,
-        'legend.frameon': True,
-        'lines.linewidth': 1,
-        'lines.markersize': 3,
-        'savefig.dpi': 300,
-        'savefig.bbox': 'tight',
+        "figure.figsize": (12, 6),
+        "axes.grid": True,
+        "grid.alpha": 0.3,
+        "axes.titlesize": 14,
+        "axes.labelsize": 14,
+        "legend.fontsize": 9,
+        "legend.frameon": True,
+        "lines.linewidth": 1,
+        "lines.markersize": 3,
+        "savefig.dpi": 300,
+        "savefig.bbox": "tight",
     }
 )
 
@@ -139,36 +139,36 @@ def question_1a():
     _, axes = plt.subplots(1, 2)
     ax1, ax2 = axes
 
-    ax1.set_title('Full GD Trajectory')
-    ax1.set_xlabel('theta_1')
-    ax1.set_ylabel('theta_2')
+    ax1.set_title("Full GD Trajectory")
+    ax1.set_xlabel("theta_1")
+    ax1.set_ylabel("theta_2")
 
     ax1.contour(
         Theta1,
         Theta2,
         loss_fn(X, Theta_combs, y).reshape(Theta1.shape),
         levels=30,
-        cmap='plasma',
+        cmap="plasma",
     )
     final_step = steps[-1].flatten()
-    ax1.plot(*zip(*steps), color='blue', marker='o', label='Trajectory')
+    ax1.plot(*zip(*steps), color="blue", marker="o", label="Trajectory")
     ax1.scatter(
         *final_step,
-        c='red',
+        c="red",
         zorder=5,
-        label=f'Last Step ({final_step[0]:.3f}, {final_step[1]:.3f})',
+        label=f"Last Step ({final_step[0]:.3f}, {final_step[1]:.3f})",
     )
-    ax1.scatter(*theta_star, c='black', s=30, label='Optimum')
+    ax1.scatter(*theta_star, c="black", s=30, label="Optimum")
     ax1.legend()
 
-    ax2.set_title('Full GD Loss vs. Iterations')
-    ax2.set_xlabel('Iterations')
-    ax2.set_ylabel('Loss (log)')
-    ax2.plot(range(epochs + 1), losses, color='blue', label='Loss')
-    ax2.set_yscale('log')
+    ax2.set_title("Full GD Loss vs. Iterations")
+    ax2.set_xlabel("Iterations")
+    ax2.set_ylabel("Loss (log)")
+    ax2.plot(range(epochs + 1), losses, color="blue", label="Loss")
+    ax2.set_yscale("log")
     ax2.legend()
 
-    plt.savefig('./images/question1a.png')
+    plt.savefig("./images/question1a.png")
     plt.show()
 
 
@@ -178,7 +178,7 @@ def question_1b():
     )
 
     batch_sizes = [len(X), 5, 20]
-    colors = ['blue', 'red', 'green']
+    colors = ["blue", "red", "green"]
     updates = 400
     alpha = 0.5
 
@@ -194,43 +194,43 @@ def question_1b():
         all_losses.append(batch_losses)
 
     fig_contour, ax_contour = plt.subplots()
-    ax_contour.set_title('SGD Trajectories by Batch Size')
-    ax_contour.set_xlabel('theta_1')
-    ax_contour.set_ylabel('theta_2')
+    ax_contour.set_title("SGD Trajectories by Batch Size")
+    ax_contour.set_xlabel("theta_1")
+    ax_contour.set_ylabel("theta_2")
     ax_contour.contour(
         Theta1,
         Theta2,
         loss_fn(X, Theta_combs, y).reshape(Theta1.shape),
         levels=20,
-        cmap='plasma',
+        cmap="plasma",
     )
     for steps, batch_size, color in zip(all_steps, batch_sizes, colors):
         ax_contour.plot(
             *zip(*steps[::10]),
             color=color,
-            marker='o',
-            label=f'Batch size {batch_size}',
+            marker="o",
+            label=f"Batch size {batch_size}",
         )
         ax_contour.scatter(*steps[-1], c=color)
-    ax_contour.scatter(*theta_star, c='black', s=30, label='Optimum')
+    ax_contour.scatter(*theta_star, c="black", s=30, label="Optimum")
     ax_contour.legend()
-    fig_contour.savefig('./images/question1b_trajectories.png')
+    fig_contour.savefig("./images/question1b_trajectories.png")
     plt.show()
 
     fig_loss, ax_loss = plt.subplots()
-    ax_loss.set_title('SGD Loss vs. Updates by Batch Size')
-    ax_loss.set_xlabel('Updates')
-    ax_loss.set_ylabel('Loss (log)')
+    ax_loss.set_title("SGD Loss vs. Updates by Batch Size")
+    ax_loss.set_xlabel("Updates")
+    ax_loss.set_ylabel("Loss (log)")
     for batch_losses, batch_size, color in zip(all_losses, batch_sizes, colors):
         ax_loss.plot(
             range(updates + 1),
             batch_losses,
             color=color,
-            label=f'Batch size {batch_size}',
+            label=f"Batch size {batch_size}",
         )
-    ax_loss.set_yscale('symlog')
+    ax_loss.set_yscale("symlog")
     ax_loss.legend()
-    fig_loss.savefig('./images/question1b_loss.png')
+    fig_loss.savefig("./images/question1b_loss.png")
     plt.show()
 
 
@@ -245,9 +245,9 @@ def question_1c():
     beta = 0.9
 
     optimizers = [
-        ('Constant', constant_optimizer(alpha, dloss_fn), 'blue'),
-        ('NAG', nag(alpha, beta, dloss_fn), 'red'),
-        ('Adagrad', adagrad(alpha, dloss_fn), 'green'),
+        ("Constant", constant_optimizer(alpha, dloss_fn), "blue"),
+        ("NAG", nag(alpha, beta, dloss_fn), "red"),
+        ("Adagrad", adagrad(alpha, dloss_fn), "green"),
     ]
 
     all_results = []
@@ -259,38 +259,38 @@ def question_1c():
         all_results.append((name, steps, losses, color))
 
     fig_contour, ax_contour = plt.subplots()
-    ax_contour.set_title(f'Optimizer Trajectories (batch size {batch_size})')
-    ax_contour.set_xlabel('theta_1')
-    ax_contour.set_ylabel('theta_2')
+    ax_contour.set_title(f"Optimizer Trajectories (batch size {batch_size})")
+    ax_contour.set_xlabel("theta_1")
+    ax_contour.set_ylabel("theta_2")
     ax_contour.contour(
         Theta1,
         Theta2,
         loss_fn(X, Theta_combs, y).reshape(Theta1.shape),
         levels=20,
-        cmap='plasma',
+        cmap="plasma",
     )
 
     for name, steps, _, color in all_results:
-        ax_contour.plot(*zip(*steps[::2]), color=color, marker='o', label=name)
+        ax_contour.plot(*zip(*steps[::2]), color=color, marker="o", label=name)
         ax_contour.scatter(*steps[-1], c=color)
 
-    ax_contour.scatter(*theta_star, c='black', s=30, label='Optimum')
+    ax_contour.scatter(*theta_star, c="black", s=30, label="Optimum")
     ax_contour.legend()
     ax_contour.grid(False)
-    fig_contour.savefig('./images/question1c_trajectories.png')
+    fig_contour.savefig("./images/question1c_trajectories.png")
     plt.show()
 
     fig_loss, ax_loss = plt.subplots()
-    ax_loss.set_title(f'Loss vs. Updates by Optimizer (batch size {batch_size})')
-    ax_loss.set_xlabel('Updates')
-    ax_loss.set_ylabel('Loss (log)')
+    ax_loss.set_title(f"Loss vs. Updates by Optimizer (batch size {batch_size})")
+    ax_loss.set_xlabel("Updates")
+    ax_loss.set_ylabel("Loss (log)")
 
     for name, _, losses, color in all_results:
         ax_loss.plot(range(updates + 1), losses, color=color, label=name)
 
-    ax_loss.set_yscale('symlog')
+    ax_loss.set_yscale("symlog")
     ax_loss.legend()
-    fig_loss.savefig('./images/question1c_loss.png')
+    fig_loss.savefig("./images/question1c_loss.png")
     plt.show()
 
 
@@ -343,36 +343,36 @@ def question_2a():
     _, axes = plt.subplots(1, 2)
     ax1, ax2 = axes
 
-    ax1.set_title('Full GD Trajectory')
-    ax1.set_xlabel('w1')
-    ax1.set_ylabel('w2')
+    ax1.set_title("Full GD Trajectory")
+    ax1.set_xlabel("w1")
+    ax1.set_ylabel("w2")
 
     ax1.contour(
         X1,
         X2,
         loss_fn(U, X_comb, y).reshape(X1.shape),
         levels=20,
-        cmap='plasma',
+        cmap="plasma",
     )
     final_step = steps[-1].flatten()
-    ax1.plot(*zip(*steps), color='blue', marker='o', label='Trajectory')
+    ax1.plot(*zip(*steps), color="blue", marker="o", label="Trajectory")
     ax1.scatter(
         *final_step,
-        c='red',
+        c="red",
         zorder=5,
-        label=f'Last Step ({final_step[0]:.3f}, {final_step[1]:.3f})',
+        label=f"Last Step ({final_step[0]:.3f}, {final_step[1]:.3f})",
     )
-    ax1.scatter(*X_star, c='black', s=30, label='Optimum')
+    ax1.scatter(*X_star, c="black", s=30, label="Optimum")
     ax1.legend()
 
-    ax2.set_title('Full GD Loss vs. Iterations')
-    ax2.set_xlabel('Iterations')
-    ax2.set_ylabel('Loss (log)')
-    ax2.plot(range(max_updates + 1), losses, color='blue', label='Loss')
-    ax2.set_yscale('log')
+    ax2.set_title("Full GD Loss vs. Iterations")
+    ax2.set_xlabel("Iterations")
+    ax2.set_ylabel("Loss (log)")
+    ax2.plot(range(max_updates + 1), losses, color="blue", label="Loss")
+    ax2.set_yscale("log")
     ax2.legend()
 
-    plt.savefig('./images/quertion2a.png')
+    plt.savefig("./images/quertion2a.png")
     plt.show()
 
 
@@ -380,8 +380,8 @@ def question_2b():
     U, y, X_star, loss_fn, dloss_fn, X1, X2, X_comb = _setup_question2()
 
     batch_sizes = [len(U), 20, 5]
-    colors = ['red', 'green', 'blue']
-    colors = ['blue', 'red', 'green']
+    colors = ["red", "green", "blue"]
+    colors = ["blue", "red", "green"]
     updates = 500
     alpha = 0.5
 
@@ -397,49 +397,49 @@ def question_2b():
         all_losses.append(batch_losses)
 
     fig_contour, ax_contour = plt.subplots(figsize=(10, 8))
-    ax_contour.set_title('SGD Trajectories by Batch Size')
-    ax_contour.set_xlabel('w1')
-    ax_contour.set_ylabel('w2')
+    ax_contour.set_title("SGD Trajectories by Batch Size")
+    ax_contour.set_xlabel("w1")
+    ax_contour.set_ylabel("w2")
     ax_contour.contour(
         X1,
         X2,
         loss_fn(U, X_comb, y).reshape(X1.shape),
         levels=20,
-        cmap='plasma',
+        cmap="plasma",
     )
     for steps, batch_size, color in zip(all_steps, batch_sizes, colors):
         final_step = steps[-1].flatten()
         ax_contour.plot(
             *zip(*steps[::]),
             color=color,
-            marker='o',
-            label=f'Batch size {batch_size}',
+            marker="o",
+            label=f"Batch size {batch_size}",
         )
         ax_contour.scatter(
             *final_step,
             c=color,
             zorder=5,
-            label=f'Final ({final_step[0]:.3f}, {final_step[1]:.3f})',
+            label=f"Final ({final_step[0]:.3f}, {final_step[1]:.3f})",
         )
-    ax_contour.scatter(*X_star, c='black', s=30, label='Optimum')
+    ax_contour.scatter(*X_star, c="black", s=30, label="Optimum")
     ax_contour.legend()
-    fig_contour.savefig('./images/question2b_trajectories.png')
+    fig_contour.savefig("./images/question2b_trajectories.png")
     plt.show()
 
     fig_loss, ax_loss = plt.subplots(figsize=(8, 5))
     for batch_losses, batch_size, color in zip(all_losses, batch_sizes, colors):
-        ax_loss.set_title(f'SGD Loss vs. Updates (Batch size {batch_size})')
-        ax_loss.set_xlabel('Updates')
-        ax_loss.set_ylabel('Loss (log)')
+        ax_loss.set_title(f"SGD Loss vs. Updates (Batch size {batch_size})")
+        ax_loss.set_xlabel("Updates")
+        ax_loss.set_ylabel("Loss (log)")
         ax_loss.plot(
             range(updates + 1),
             batch_losses,
             color=color,
-            label=f'Batch size {batch_size}',
+            label=f"Batch size {batch_size}",
         )
-        ax_loss.set_yscale('symlog')
+        ax_loss.set_yscale("symlog")
         ax_loss.legend()
-    fig_loss.savefig(f'./images/question2b_loss.png')
+    fig_loss.savefig(f"./images/question2b_loss.png")
     plt.show()
 
 
@@ -452,9 +452,9 @@ def question_2c():
     beta = 0.9
 
     optimizers = [
-        ('Constant', constant_optimizer(alpha, dloss_fn), 'blue'),
-        ('NAG', nag(alpha, beta, dloss_fn), 'red'),
-        ('Adagrad', adagrad(alpha, dloss_fn), 'green'),
+        ("Constant", constant_optimizer(alpha, dloss_fn), "blue"),
+        ("NAG", nag(alpha, beta, dloss_fn), "red"),
+        ("Adagrad", adagrad(alpha, dloss_fn), "green"),
     ]
 
     all_results = []
@@ -466,44 +466,44 @@ def question_2c():
         all_results.append((name, steps, losses, color))
 
     fig_contour, ax_contour = plt.subplots()
-    ax_contour.set_title(f'Optimizer Trajectories (batch size {batch_size})')
-    ax_contour.set_xlabel('w1')
-    ax_contour.set_ylabel('w2')
+    ax_contour.set_title(f"Optimizer Trajectories (batch size {batch_size})")
+    ax_contour.set_xlabel("w1")
+    ax_contour.set_ylabel("w2")
     ax_contour.contour(
         X1,
         X2,
         loss_fn(U, X_comb, y).reshape(X1.shape),
         levels=20,
-        cmap='plasma',
+        cmap="plasma",
     )
 
     for name, steps, _, color in all_results:
         final_step = steps[-1].flatten()
-        ax_contour.plot(*zip(*steps[::]), color=color, marker='o', label=name)
+        ax_contour.plot(*zip(*steps[::]), color=color, marker="o", label=name)
         ax_contour.scatter(
             *final_step,
             c=color,
             zorder=5,
-            label=f'{name} Final ({final_step[0]:.3f}, {final_step[1]:.3f})',
+            label=f"{name} Final ({final_step[0]:.3f}, {final_step[1]:.3f})",
         )
 
-    ax_contour.scatter(*X_star, c='black', s=30, label='Optimum')
+    ax_contour.scatter(*X_star, c="black", s=30, label="Optimum")
     ax_contour.legend()
     ax_contour.grid(False)
-    fig_contour.savefig('./images/question2c_trajectories.png')
+    fig_contour.savefig("./images/question2c_trajectories.png")
     plt.show()
 
     fig_loss, ax_loss = plt.subplots()
-    ax_loss.set_title(f'Loss vs. Updates by Optimizer (batch size {batch_size})')
-    ax_loss.set_xlabel('Updates')
-    ax_loss.set_ylabel('Loss (log)')
+    ax_loss.set_title(f"Loss vs. Updates by Optimizer (batch size {batch_size})")
+    ax_loss.set_xlabel("Updates")
+    ax_loss.set_ylabel("Loss (log)")
 
     for name, _, losses, color in all_results:
         ax_loss.plot(range(updates + 1), losses, color=color, label=name)
 
-    ax_loss.set_yscale('symlog')
+    ax_loss.set_yscale("symlog")
     ax_loss.legend()
-    fig_loss.savefig('./images/question2c_loss.png')
+    fig_loss.savefig("./images/question2c_loss.png")
     plt.show()
 
 
@@ -620,20 +620,20 @@ def question_3a():
     min_idx = int(np.argmin(losses))
 
     plt.figure(figsize=(12, 8))
-    plt.plot(losses, color='blue', label='f(x)')
+    plt.plot(losses, color="blue", label="f(x)")
     plt.scatter(
         min_idx,
         losses[min_idx],
-        color='red',
+        color="red",
         zorder=5,
-        label=f'Min: f={losses[min_idx]:.4f} at iter {min_idx}',
+        label=f"Min: f={losses[min_idx]:.4f} at iter {min_idx}",
     )
-    plt.title('Rosenbrock GD: f(x) vs Iterations')
-    plt.xlabel('Iteration')
-    plt.ylabel('f(x) (log)')
-    plt.yscale('log')
+    plt.title("Rosenbrock GD: f(x) vs Iterations")
+    plt.xlabel("Iteration")
+    plt.ylabel("f(x) (log)")
+    plt.yscale("log")
     plt.legend()
-    plt.savefig('./images/question3a.png')
+    plt.savefig("./images/question3a.png")
     plt.show()
 
 
@@ -649,20 +649,20 @@ def question_3b():
     min_idx = int(np.argmin(losses))
 
     plt.figure(figsize=(12, 8))
-    plt.plot(losses, color='blue', label='f(x)')
+    plt.plot(losses, color="blue", label="f(x)")
     plt.scatter(
         min_idx,
         losses[min_idx],
-        color='red',
+        color="red",
         zorder=5,
-        label=f'Min: f={losses[min_idx]:.4f} at iter {min_idx}',
+        label=f"Min: f={losses[min_idx]:.4f} at iter {min_idx}",
     )
-    plt.title('Rosenbrock Newton Updates: f(x) vs Iterations')
-    plt.xlabel('Iteration')
-    plt.ylabel('f(x) (log)')
-    plt.yscale('log')
+    plt.title("Rosenbrock Newton Updates: f(x) vs Iterations")
+    plt.xlabel("Iteration")
+    plt.ylabel("f(x) (log)")
+    plt.yscale("log")
     plt.legend()
-    plt.savefig('./images/question3b.png')
+    plt.savefig("./images/question3b.png")
     plt.show()
 
 
@@ -693,55 +693,55 @@ def question_3c():
     damped_steps = np.array(damped_steps)
 
     plt.figure(figsize=(12, 8))
-    plt.plot(gd_losses, label='GD', color='red')
-    plt.plot(newton_losses, label='Newton', color='green')
-    plt.plot(damped_losses, label='Damped Newton', color='blue')
-    plt.title('Rosenbrock: f(x) vs Iterations')
-    plt.xlabel('Iteration')
-    plt.ylabel('f(x) (log)')
-    plt.yscale('log')
+    plt.plot(gd_losses, label="GD", color="red")
+    plt.plot(newton_losses, label="Newton", color="green")
+    plt.plot(damped_losses, label="Damped Newton", color="blue")
+    plt.title("Rosenbrock: f(x) vs Iterations")
+    plt.xlabel("Iteration")
+    plt.ylabel("f(x) (log)")
+    plt.yscale("log")
     plt.legend()
-    plt.savefig('./images/question3c_loss.png')
+    plt.savefig("./images/question3c_loss.png")
     plt.show()
 
     X1, X2 = np.meshgrid(np.linspace(-3, 2, 100), np.linspace(-2, 2.5, 100))
     plt.figure(figsize=(12, 8))
 
-    cs = plt.contour(X1, X2, f([X1, X2]), levels=30, cmap='plasma')
+    cs = plt.contour(X1, X2, f([X1, X2]), levels=30, cmap="plasma")
     plt.clabel(cs, inline=True, fontsize=6)
     plt.plot(
         gd_steps[:, 0],
         gd_steps[:, 1],
-        label='GD',
-        color='red',
-        marker='o',
+        label="GD",
+        color="red",
+        marker="o",
     )
     plt.plot(
         newton_steps[:, 0],
         newton_steps[:, 1],
-        label='Newton',
-        color='green',
-        marker='o',
+        label="Newton",
+        color="green",
+        marker="o",
     )
     plt.plot(
         damped_steps[:, 0],
         damped_steps[:, 1],
-        label='Damped Newton',
-        color='blue',
-        marker='o',
+        label="Damped Newton",
+        color="blue",
+        marker="o",
     )
 
-    plt.title('Rosenbrock: Trajectories')
-    plt.xlabel('x1')
-    plt.ylabel('x2')
+    plt.title("Rosenbrock: Trajectories")
+    plt.xlabel("x1")
+    plt.ylabel("x2")
     plt.legend()
-    plt.savefig('./images/question3c_trajectories.png')
+    plt.savefig("./images/question3c_trajectories.png")
     plt.show()
 
 
-if __name__ == '__main__':
-    if not os.path.exists('./images'):
-        os.makedirs('./images')
+if __name__ == "__main__":
+    if not os.path.exists("./images"):
+        os.makedirs("./images")
 
     sp.init_printing(use_unicode=True, use_latex=False, pretty_print=True)
 
