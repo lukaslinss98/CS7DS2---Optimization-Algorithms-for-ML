@@ -2,6 +2,7 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.patches import Rectangle
 from numpy.linalg import inv
 
 plt.rcParams["savefig.dpi"] = 150
@@ -1403,7 +1404,191 @@ def question_4b_II():
 
 
 def question_5_I():
-    pass
+    net, grad_fn, _, _, _ = setup_benchmark_B()
+
+    net_penalised = lambda x, lam: net(x) + lam * max(0, -x[0, 0] + 0.5)
+
+    def grad_fn_penalised(x, lam):
+        grads = grad_fn(x)
+        grad_x1, grad_x2 = grads[0, 0], grads[1, 0]
+        x1 = x[0, 0]
+
+        if x1 < 0.5:
+            grad_x1 -= lam
+
+        return np.array([[grad_x1], [grad_x2]])
+
+    gd_steps_2, _ = gradient_descent(
+        grad_fn=grad_fn, x0=[0.2, 4.0], alpha=0.07, iters=100
+    )
+    gd_losses_2 = [net(s) for s in gd_steps_2]
+
+    steps_proj = projected_gradient_descent(
+        grad_fn=grad_fn, alpha=0.08, x0=[0.2, 4.0], iters=100
+    )
+    proj_losses = [net(s) for s in steps_proj]
+
+    steps_pen_low, _ = gradient_descent(
+        grad_fn=lambda x: grad_fn_penalised(x, 0.15),
+        x0=[0.2, 4.0],
+        alpha=0.05,
+        iters=100,
+    )
+
+    pen_losses_low = [net_penalised(s, 0.15) for s in steps_pen_low]
+
+    steps_pen_mid, _ = gradient_descent(
+        grad_fn=lambda x: grad_fn_penalised(x, 1.8),
+        x0=[0.2, 4.0],
+        alpha=0.05,
+        iters=100,
+    )
+    pen_losses_mid = [net_penalised(s, 1.8) for s in steps_pen_mid]
+
+    steps_pen_high, _ = gradient_descent(
+        grad_fn=lambda x: grad_fn_penalised(x, 4.5),
+        x0=[0.2, 4.0],
+        alpha=0.03,
+        iters=100,
+    )
+    pen_losses_high = [net_penalised(s, 4.5) for s in steps_pen_high]
+
+    _, ax = plt.subplots()
+    ax.set_title("Toy Neural Net f(x) vs Iterations (Projected GD)")
+    ax.set_xlabel("Iterations")
+    ax.set_ylabel("f(x) Neural Net")
+    ax.plot(range(len(gd_losses_2)), gd_losses_2, color="green", label="GD")
+    ax.plot(range(len(proj_losses)), proj_losses, color="blue", label="Projected GD")
+    ax.plot(range(len(pen_losses_low)), pen_losses_low, color="red", label="λ=0.15")
+    ax.plot(range(len(pen_losses_mid)), pen_losses_mid, color="purple", label="λ=1.8")
+    ax.plot(
+        range(len(pen_losses_high)),
+        pen_losses_high,
+        color="orange",
+        label="λ=4.5",
+    )
+    ax.set_yscale("log")
+    ax.legend()
+    ax.grid(True)
+    plt.savefig("./final/images/question_5_I_losses.png")
+    plt.show()
+
+    gd_traj = np.array([np.array(s).flatten() for s in gd_steps_2])
+    proj_traj = np.array([np.array(s).flatten() for s in steps_proj])
+    pen_traj_low = np.array([np.array(s).flatten() for s in steps_pen_low])
+    pen_traj_mid = np.array([np.array(s).flatten() for s in steps_pen_mid])
+    pen_traj_high = np.array([np.array(s).flatten() for s in steps_pen_high])
+
+    space_x1 = np.linspace(0.15, 0.7, 200)
+    space_x2 = np.linspace(0, 5, 200)
+    X1, X2 = np.meshgrid(space_x1, space_x2)
+    Z = (X1 - 1) ** 2 + 5 * (X2 - 2) ** 2 + np.sin(X1)
+
+    _, ax = plt.subplots()
+    ax.set_title("Toy Neural Net: Contour andTrajectories")
+    ax.set_xlabel("x1")
+    ax.set_ylabel("x2")
+    ax.contour(X1, X2, Z, levels=20)
+    rect = Rectangle(
+        (0.5, 0),
+        0.7 - 0.5,
+        5,
+        facecolor="blue",
+        alpha=0.15,
+        edgecolor="black",
+        linestyle="--",
+        linewidth=2,
+        zorder=10,
+        label="Feasible Region",
+    )
+    ax.add_patch(rect)
+    ax.plot(
+        gd_traj[:, 0],
+        gd_traj[:, 1],
+        color="green",
+        marker="o",
+        ms=4,
+        label=f"GD ({gd_traj[-1, 0]:.2f}, {gd_traj[-1, 1]:.2f})",
+    )
+    ax.plot(
+        proj_traj[:, 0],
+        proj_traj[:, 1],
+        color="blue",
+        marker="o",
+        ms=4,
+        label=f"Penalised GD ({proj_traj[-1, 0]:.2f}, {proj_traj[-1, 1]:.2f})",
+    )
+    ax.plot(
+        pen_traj_low[:, 0],
+        pen_traj_low[:, 1],
+        color="red",
+        marker="o",
+        ms=4,
+        label=f"Penalised GD ({pen_traj_low[-1, 0]:.2f}, {pen_traj_low[-1, 1]:.2f})",
+    )
+    ax.plot(
+        pen_traj_mid[:, 0],
+        pen_traj_mid[:, 1],
+        color="purple",
+        marker="o",
+        ms=4,
+        label=f"Penalised GD ({pen_traj_mid[-1, 0]:.2f}, {pen_traj_mid[-1, 1]:.2f})",
+    )
+    ax.plot(
+        pen_traj_high[:, 0],
+        pen_traj_high[:, 1],
+        color="orange",
+        marker="o",
+        ms=4,
+        label=f"Penalised GD ({pen_traj_high[-1, 0]:.2f}, {pen_traj_high[-1, 1]:.2f})",
+    )
+    ax.legend()
+    ax.grid(True)
+    plt.savefig("./final/images/question_5_I_contours.png")
+    plt.show()
+
+    x1s_low = [step[0, 0] for step in steps_pen_low]
+    x1s_mid = [step[0, 0] for step in steps_pen_mid]
+    x1s_high = [step[0, 0] for step in steps_pen_high]
+    x1s_proj = [step[0, 0] for step in steps_proj]
+
+    violations_low = [max(0, 0.5 - x1) for x1 in x1s_low]
+    violations_mid = [max(0, 0.5 - x1) for x1 in x1s_mid]
+    violations_high = [max(0, 0.5 - x1) for x1 in x1s_high]
+    violations_proj = [max(0, 0.5 - x1) for x1 in x1s_proj]
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+    ax1.set_title("Constraint Violation (x1 >= 0.5) vs Iterations")
+    ax1.set_xlabel("Iterations")
+    ax1.set_ylabel("Violation")
+    ax1.plot(
+        range(len(violations_proj)),
+        violations_proj,
+        color="purple",
+        label="Projected GD",
+    )
+    ax1.plot(range(len(violations_low)), violations_low, color="blue", label="λ=0.15")
+    ax1.plot(range(len(violations_mid)), violations_mid, color="orange", label="λ=1.8")
+    ax1.plot(range(len(violations_high)), violations_high, color="red", label="λ=4.5")
+    ax1.set_yscale("symlog")
+    ax1.legend()
+    ax1.grid(True)
+
+    ax2.set_title("Constraint Violation (x1 >= 0.5) — First 30 Iterations")
+    ax2.set_xlabel("Iterations")
+    ax2.set_ylabel("Violation")
+    ax2.plot(range(30), violations_proj[:30], color="purple", label="Projected GD")
+    ax2.plot(range(30), violations_low[:30], color="blue", label="λ=0.15")
+    ax2.plot(range(30), violations_mid[:30], color="orange", label="λ=1.8")
+    ax2.plot(range(30), violations_high[:30], color="red", label="λ=4.5")
+    ax2.set_yscale("symlog")
+    ax2.legend()
+    ax2.grid(True)
+
+    fig.suptitle("Constraint Violation (x1 >= 0.5) vs Iterations")
+    plt.tight_layout()
+    plt.savefig("./final/images/question_5_II_violations.png")
+    plt.show()
 
 
 if __name__ == "__main__":
