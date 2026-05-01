@@ -2,7 +2,7 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.patches import Rectangle
+from matplotlib.patches import Polygon, Rectangle
 from numpy.linalg import inv
 
 plt.rcParams["savefig.dpi"] = 150
@@ -371,6 +371,21 @@ def projected_gradient_descent(
         steps.append(xi.copy())
 
     return steps
+
+
+def frank_wolfe(grad_fn, x0, beta, vertices, iters):
+    xi = x0
+    steps = [xi]
+    zs = []
+
+    for _ in range(iters):
+        scores = vertices @ grad_fn(*xi)
+        z = vertices[np.argmin(scores)]
+        xi = beta * xi + (1 - beta) * z
+        steps.append(xi.copy())
+        zs.append(z)
+
+    return steps, zs
 
 
 def plot_loss(losses, title, ylabel, savepath):
@@ -1403,7 +1418,7 @@ def question_4b_II():
     plt.show()
 
 
-def question_5_I():
+def question_5():
     net, grad_fn, _, _, _ = setup_benchmark_B()
 
     net_penalised = lambda x, lam: net(x) + lam * max(0, -x[0, 0] + 0.5)
@@ -1591,26 +1606,311 @@ def question_5_I():
     plt.show()
 
 
+def question_6_I():
+    loss_fn = lambda x: np.array([[1], [2]]) @ x
+    vertices = [(0.5, -5), (0.5, 10), (5, 10), (5, -5)]
+    space_x1 = np.linspace(0, 7, 200)
+    space_x2 = np.linspace(-6, 12, 200)
+    X1, X2 = np.meshgrid(space_x1, space_x2)
+    Z = 1 * X1 + 2 * X2
+    fig, ax = plt.subplots()
+    ax.set_title("Linear Function Contour with Feasible Region (Frank-Wolfe)")
+    ax.set_xlabel("x1")
+    ax.set_ylabel("x2")
+    ax.contour(X1, X2, Z, levels=20)
+    feasible_patch = Polygon(
+        vertices,
+        facecolor="blue",
+        alpha=0.15,
+        edgecolor="black",
+        linestyle="--",
+        linewidth=2,
+        zorder=10,
+        label="Feasible Region",
+    )
+    ax.add_patch(feasible_patch)
+    ax.scatter(
+        [v[0] for v in vertices],
+        [v[1] for v in vertices],
+        c="black",
+        zorder=15,
+        s=50,
+        marker="o",
+        label="Vertices",
+    )
+    ax.scatter(
+        0.5, -5, c="red", zorder=16, s=150, marker="*", label="Optimal (0.5, -5)"
+    )
+    legend = ax.legend()
+    legend.set_zorder(20)
+    ax.grid(False)
+    plt.savefig("./final/images/question_6_I_contours.png")
+    plt.show()
+
+
+def question_6_II():
+    loss_fn = lambda x1, x2: (x1 - 1) ** 2 + (x2 - 5) ** 2
+
+    def grad_fn(x1, x2):
+        dfdx1 = 2 * (x1 - 1)
+        dfdx2 = 2 * (x2 - 5)
+        return np.array([dfdx1, dfdx2])
+
+    vertices = np.array([[0.5, -5], [0.5, 10], [5, 10], [5, -5]])
+
+    x0 = np.array([1, 1])
+
+    steps_low, zs_low = frank_wolfe(
+        grad_fn=grad_fn, x0=x0, beta=0.9, vertices=vertices, iters=180
+    )
+    steps_high, zs_high = frank_wolfe(
+        grad_fn=grad_fn, x0=x0, beta=0.985, vertices=vertices, iters=180
+    )
+
+    losses_low = [loss_fn(*s) for s in steps_low]
+    losses_high = [loss_fn(*s) for s in steps_high]
+    _, ax = plt.subplots()
+    ax.set_title("Loss vs Iterations (Frank-Wolfe)")
+    ax.set_xlabel("Iterations")
+    ax.set_ylabel("f(x)")
+    ax.plot(range(len(losses_low)), losses_low, color="blue", label="β=0.9")
+    ax.plot(range(len(losses_high)), losses_high, color="red", label="β=0.985")
+    ax.set_yscale("log")
+    ax.legend()
+    ax.grid(True)
+    plt.savefig("./final/images/question_6_II_losses.png")
+    plt.show()
+
+    traj_low = np.array(steps_low)
+    traj_high = np.array(steps_high)
+    space_x1 = np.linspace(0, 5.5, 200)
+    space_x2 = np.linspace(-6, 12, 200)
+    X1, X2 = np.meshgrid(space_x1, space_x2)
+    _, ax = plt.subplots()
+    ax.set_title("Quadratic Function Contour with Frank-Wolfe Trajectory")
+    ax.set_xlabel("x1")
+    ax.set_ylabel("x2")
+    ax.contour(X1, X2, loss_fn(X1, X2), levels=30)
+    feasible_patch = Polygon(
+        vertices,
+        facecolor="blue",
+        alpha=0.15,
+        edgecolor="black",
+        linestyle="--",
+        linewidth=2,
+        zorder=10,
+        label="Feasible Region",
+    )
+    ax.add_patch(feasible_patch)
+    ax.scatter(
+        [v[0] for v in vertices],
+        [v[1] for v in vertices],
+        c="black",
+        zorder=15,
+        s=50,
+        marker="o",
+        label="Vertices",
+    )
+    ax.plot(
+        traj_low[:, 0],
+        traj_low[:, 1],
+        color="blue",
+        marker="o",
+        ms=4,
+        label=f"β=0.9 ({traj_low[-1, 0]:.2f}, {traj_low[-1, 1]:.2f})",
+    )
+    ax.plot(
+        traj_high[:, 0],
+        traj_high[:, 1],
+        color="red",
+        marker="o",
+        ms=4,
+        label=f"β=0.985 ({traj_high[-1, 0]:.2f}, {traj_high[-1, 1]:.2f})",
+    )
+    legend = ax.legend()
+    legend.set_zorder(20)
+    ax.grid(False)
+    plt.savefig("./final/images/question_6_II_contours.png")
+    plt.show()
+
+    traj_low = np.array(steps_low)
+    traj_high = np.array(steps_high)
+    z_low = np.array(zs_low)
+    z_high = np.array(zs_high)
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+    ax1.set_title("x1 and x2 vs Iterations (β=0.9)")
+    ax1.set_xlabel("Iterations")
+    ax1.set_ylabel("Value")
+    ax1.plot(traj_low[:, 0], color="blue", marker="o", ms=3, label="x1")
+    ax1.plot(traj_low[:, 1], color="red", marker="o", ms=3, label="x2")
+    ax1.legend(fontsize=8)
+    ax1.grid(True)
+
+    ax2.set_title("x1 and x2 vs Iterations (β=0.985)")
+    ax2.set_xlabel("Iterations")
+    ax2.set_ylabel("Value")
+    ax2.plot(traj_high[:, 0], color="blue", marker="o", ms=3, label="x1")
+    ax2.plot(traj_high[:, 1], color="red", marker="o", ms=3, label="x2")
+    ax2.legend(fontsize=8)
+    ax2.grid(True)
+
+    fig.suptitle("Frank-Wolfe: x1 and x2 vs Iterations")
+    plt.tight_layout()
+    plt.savefig("./final/images/question_6_II_variables.png")
+    plt.show()
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+    ax1.set_title("z vs Iterations (β=0.9)")
+    ax1.set_xlabel("Iterations")
+    ax1.set_ylabel("Value")
+    ax1.scatter(range(len(z_low)), z_low[:, 0], color="blue", s=10, label="z1")
+    ax1.scatter(range(len(z_low)), z_low[:, 1], color="red", s=10, label="z2")
+    ax1.legend(fontsize=8)
+    ax1.grid(True)
+
+    ax2.set_title("z vs Iterations (β=0.985)")
+    ax2.set_xlabel("Iterations")
+    ax2.set_ylabel("Value")
+    ax2.scatter(range(len(z_high)), z_high[:, 0], color="blue", s=10, label="z1")
+    ax2.scatter(range(len(z_high)), z_high[:, 1], color="red", s=10, label="z2")
+    ax2.legend(fontsize=8)
+    ax2.grid(True)
+
+    fig.suptitle("Frank-Wolfe: z vs Iterations")
+    plt.tight_layout()
+    plt.savefig("./final/images/question_6_II_z.png")
+    plt.show()
+
+
+def question_6_III():
+    loss_fn = lambda x1, x2: x1**2 + x2**2
+
+    def grad_fn(x1, x2):
+        dfdx1 = 2 * x1
+        dfdx2 = 2 * x2
+        return np.array([dfdx1, dfdx2])
+
+    vertices = np.array([[0.5, -5], [0.5, 10], [5, 10], [5, -5]])
+
+    x0 = np.array([3, 3])
+
+    steps, zs = frank_wolfe(
+        grad_fn=grad_fn, x0=x0, beta=0.93, vertices=vertices, iters=140
+    )
+
+    losses = [loss_fn(*s) for s in steps]
+    _, ax = plt.subplots()
+    ax.set_title("Loss vs Iterations (Frank-Wolfe)")
+    ax.set_xlabel("Iterations")
+    ax.set_ylabel("f(x)")
+    ax.plot(range(len(losses)), losses, color="blue", label="Loss")
+    ax.set_yscale("log")
+    ax.legend()
+    ax.grid(True)
+    plt.savefig("./final/images/question_6_III_losses.png")
+    plt.show()
+
+    traj = np.array(steps)
+    space_x1 = np.linspace(0, 5.5, 200)
+    space_x2 = np.linspace(-6, 12, 200)
+    X1, X2 = np.meshgrid(space_x1, space_x2)
+    _, ax = plt.subplots()
+    ax.set_title("Quadratic Function Contour with Frank-Wolfe Trajectory")
+    ax.set_xlabel("x1")
+    ax.set_ylabel("x2")
+    ax.contour(X1, X2, loss_fn(X1, X2), levels=30)
+    feasible_patch = Polygon(
+        vertices,
+        facecolor="blue",
+        alpha=0.15,
+        edgecolor="black",
+        linestyle="--",
+        linewidth=2,
+        zorder=10,
+        label="Feasible Region",
+    )
+    ax.add_patch(feasible_patch)
+    ax.scatter(
+        [v[0] for v in vertices],
+        [v[1] for v in vertices],
+        c="black",
+        zorder=15,
+        s=50,
+        marker="o",
+        label="Vertices",
+    )
+    ax.plot(
+        traj[:, 0],
+        traj[:, 1],
+        color="blue",
+        marker="o",
+        ms=4,
+        label=f"Trajectory ({traj[-1, 0]:.2f}, {traj[-1, 1]:.2f})",
+    )
+    ax.scatter(
+        traj[-1, 0],
+        traj[-1, 1],
+        c="red",
+        zorder=16,
+        s=40,
+        marker="o",
+        label=f"Final ({traj[-1, 0]:.2f}, {traj[-1, 1]:.2f})",
+    )
+    legend = ax.legend()
+    legend.set_zorder(20)
+    ax.grid(False)
+    plt.savefig("./final/images/question_6_III_contours.png")
+    plt.show()
+
+    z = np.array(zs)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+    ax1.set_title("x1 and x2 vs Iterations (Frank-Wolfe)")
+    ax1.set_xlabel("Iterations")
+    ax1.set_ylabel("Value")
+    ax1.plot(traj[:, 0], color="blue", marker="o", ms=3, label="x1")
+    ax1.plot(traj[:, 1], color="red", marker="o", ms=3, label="x2")
+    ax1.legend(fontsize=8)
+    ax1.grid(True)
+
+    ax2.set_title("z vs Iterations (Frank-Wolfe)")
+    ax2.set_xlabel("Iterations")
+    ax2.set_ylabel("Value")
+    ax2.scatter(range(len(z)), z[:, 0], color="blue", s=10, label="z1")
+    ax2.scatter(range(len(z)), z[:, 1], color="red", s=10, label="z2")
+    ax2.legend(fontsize=8)
+    ax2.grid(True)
+
+    fig.suptitle("Frank-Wolfe: Variables vs Iterations")
+    plt.tight_layout()
+    plt.savefig("./final/images/question_6_III_variables.png")
+    plt.show()
+
+
 if __name__ == "__main__":
     if not os.path.exists("./final/images"):
         os.makedirs("./final/images")
 
-    # question_1_I()
-    # question_1_II()
-    # question_1_III()
-    # question_1_IV()
-    #
-    # question_2_I()
-    # question_2_II()
-    # question_2_III()
-    # question_2_IV()
+    question_1_I()
+    question_1_II()
+    question_1_III()
+    question_1_IV()
 
-    # question_3_I()
-    # question_3_II()
+    question_2_I()
+    question_2_II()
+    question_2_III()
+    question_2_IV()
 
-    # question_4a_I()
-    # question_4a_II()
-    # question_4b_I()
-    # question_4b_II()
+    question_3_I()
+    question_3_II()
 
-    question_5_I()
+    question_4a_I()
+    question_4a_II()
+    question_4b_I()
+    question_4b_II()
+
+    question_5()
+
+    question_6_I()
+    question_6_II()
+    question_6_III()
